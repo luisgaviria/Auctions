@@ -23,7 +23,7 @@ func main() {
 
 	controller := controllers.Controller{DB: db}
 
-	authSubrouter := router.PathPrefix("/auth").Subrouter()
+	authSubrouter := router.PathPrefix("/auth").Methods("POST").Subrouter()
 
 	authSubrouter.HandleFunc("/signup", controller.SignUp)
 	authSubrouter.HandleFunc("/login", controller.Login)
