@@ -2,6 +2,7 @@ package main
 
 import (
 	"backendAuction/controllers"
+	"backendAuction/middleware"
 	"backendAuction/utils"
 	"log"
 	"net/http"
@@ -27,6 +28,10 @@ func main() {
 
 	authSubrouter.HandleFunc("/signup", controller.SignUp)
 	authSubrouter.HandleFunc("/login", controller.Login)
+
+	auctionsSubrouter := router.PathPrefix("/auctions").Methods("GET").Subrouter()
+	auctionsSubrouter.Use(middleware.JwtValidator)
+	auctionsSubrouter.HandleFunc("/", controllers.GetAuctions)
 
 	srv := &http.Server{
 		Handler: router,

@@ -4,8 +4,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -33,7 +37,7 @@ var insertIntoUserTable = `
 `
 
 var selectFromUserTable = `
-	SELECT id, password FROM users WHERE email=$1;
+	SELECT email, password FROM users WHERE email=$1;
 `
 
 type Controller struct {
@@ -51,11 +55,11 @@ func (c *Controller) Login(w http.ResponseWriter, req *http.Request) {
 	result := c.DB.QueryRow(selectFromUserTable, creds.Email)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 	storedCreds := &Credentials{}
-	err = result.Scan(&storedCreds.Password)
+	err = result.Scan(&storedCreds.Email, &storedCreds.Password)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -63,7 +67,7 @@ func (c *Controller) Login(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 
@@ -71,7 +75,23 @@ func (c *Controller) Login(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}
 
-	// generate token
+	token, err := createToken(creds.Email)
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	cookie := http.Cookie{
+		Name:     "token",
+		Value:    token,
+		MaxAge:   3600,
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteNoneMode,
+	}
+
+	http.SetCookie(w, &cookie)
 
 	loginResponse := LoginResponse{Message: "Succesfully login user", JwtToken: "test"} // need to generate jwtToken
 	data, err := json.Marshal(loginResponse)
@@ -95,7 +115,7 @@ func (c *Controller) SignUp(w http.ResponseWriter, req *http.Request) {
 
 	if _, err = c.DB.Query(insertIntoUserTable, creds.Email, string(hashedPassword)); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 
@@ -109,6 +129,19 @@ func (c *Controller) SignUp(w http.ResponseWriter, req *http.Request) {
 	w.Write(data)
 }
 
-// func createToken(id string) {
+func createToken(email string) (string, error) {
+	claims := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": email,                                 // Subject (user identifier)
+		"iss": "auction-site",                        // Issuer
+		"exp": time.Now().Add(time.Hour * 24).Unix(), // Expiration time
+		"iat": time.Now().Unix(),                     // Issued at
+	})
 
-// }
+	tokenString, err := claims.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	if err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	return tokenString, err
+}
