@@ -40,11 +40,11 @@ var selectFromUserTable = `
 	SELECT email, password FROM users WHERE email=$1;
 `
 
-type Controller struct {
+type AuthController struct {
 	DB *sql.DB
 }
 
-func (c *Controller) Login(w http.ResponseWriter, req *http.Request) {
+func (c *AuthController) Login(w http.ResponseWriter, req *http.Request) {
 	creds := &Credentials{}
 
 	err := json.NewDecoder(req.Body).Decode(creds)
@@ -99,11 +99,12 @@ func (c *Controller) Login(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
 	w.WriteHeader(http.StatusOK)
 	w.Write(data)
 }
 
-func (c *Controller) SignUp(w http.ResponseWriter, req *http.Request) {
+func (c *AuthController) SignUp(w http.ResponseWriter, req *http.Request) {
 	creds := &Credentials{}
 	err := json.NewDecoder(req.Body).Decode(creds)
 	if err != nil {

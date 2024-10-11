@@ -2,7 +2,6 @@ package main
 
 import (
 	"backendAuction/controllers"
-	"backendAuction/middleware"
 	"backendAuction/utils"
 	"log"
 	"net/http"
@@ -22,16 +21,17 @@ func main() {
 
 	utils.InitTables(db)
 
-	controller := controllers.Controller{DB: db}
+	authController := controllers.AuthController{DB: db}
+	auctionController := controllers.AuctionsController{DB: db}
 
 	authSubrouter := router.PathPrefix("/auth").Methods("POST").Subrouter()
 
-	authSubrouter.HandleFunc("/signup", controller.SignUp)
-	authSubrouter.HandleFunc("/login", controller.Login)
+	authSubrouter.HandleFunc("/signup", authController.SignUp)
+	authSubrouter.HandleFunc("/login", authController.Login)
 
 	auctionsSubrouter := router.PathPrefix("/auctions").Methods("GET").Subrouter()
-	auctionsSubrouter.Use(middleware.JwtValidator)
-	auctionsSubrouter.HandleFunc("/", controllers.GetAuctions)
+	// auctionsSubrouter.Use(middleware.JwtValidator)
+	auctionsSubrouter.HandleFunc("/", auctionController.GetAuctions)
 
 	srv := &http.Server{
 		Handler: router,
