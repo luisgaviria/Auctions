@@ -64,12 +64,3 @@ func (c *AuctionsController) GetAuctions(w http.ResponseWriter, req *http.Reques
 	w.WriteHeader(http.StatusOK)
 	w.Write(data)
 }
-
-// func GetAuctions(w http.ResponseWriter, r *http.Request) {
-// 	props := r.Context().Value("props").(jwt.MapClaims)
-// 	userEmail := fmt.Sprintf("%v", props["sub"])
-// 	getAuctionsResponse := GetAuctionsResponse{Message: "logged as: " + userEmail}
-
-// 	data, _ := json.Marshal(getAuctionsResponse)
-// 	w.Write([]byte(data))
-// }
