@@ -1,7 +1,11 @@
 package utils
 
-import "backendAuction/utils/sites"
+import (
+	"backendAuction/utils/sites"
+	"fmt"
+)
 
 func ScrapAllSites() {
-	sites.ScrapHarvard()
+	auctions := sites.ScrapHarvard()
+	fmt.Println(auctions)
 }
