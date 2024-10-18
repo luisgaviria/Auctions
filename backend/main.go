@@ -15,6 +15,7 @@ import (
 func main() {
 	router := mux.NewRouter().StrictSlash(true)
 
+	utils.ScrapAllSites()
 	godotenv.Load()
 
 	db := utils.InitDb(os.Getenv("DB_URL"))
