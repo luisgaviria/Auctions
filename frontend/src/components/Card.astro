@@ -1,61 +1,139 @@
 ---
-interface Props {
-	title: string;
-	body: string;
-	href: string;
-}
-
-const { href, title, body } = Astro.props;
+import {Helmet} from "react-helmet";
+const {repoData, link, date, address, status,  city, state, deposit, logo} = Astro.props;
 ---
 
-<li class="link-card">
-	<a href={href}>
-		<h2>
-			{title}
-			<span>&rarr;</span>
-		</h2>
-		<p>
-			{body}
-		</p>
-	</a>
-</li>
-<style>
-	.link-card {
-		list-style: none;
-		display: flex;
-		padding: 1px;
-		background-color: #23262d;
-		background-image: none;
-		background-size: 400%;
-		border-radius: 7px;
-		background-position: 100%;
-		transition: background-position 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
-	}
-	.link-card > a {
-		width: 100%;
-		text-decoration: none;
-		line-height: 1.4;
-		padding: calc(1.5rem - 1px);
-		border-radius: 8px;
-		color: white;
-		background-color: #23262d;
-		opacity: 0.8;
-	}
-	h2 {
-		margin: 0;
-		font-size: 1.25rem;
-		transition: color 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-	}
-	p {
-		margin-top: 0.5rem;
-		margin-bottom: 0;
-	}
-	.link-card:is(:hover, :focus-within) {
-		background-position: 0;
-		background-image: var(--accent-gradient);
-	}
-	.link-card:is(:hover, :focus-within) h2 {
-		color: rgb(var(--accent-light));
-	}
-</style>
+<div class="card">
+    <Helmet>
+      <meta name="title" content="" />
+      <meta name="description" content="" />
+      <script type="application/ld+json">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "RealEstateListing",
+          name: `${id}`,
+          image: `${logo ? logo : "No Image available"}`,
+          address: {
+            "@type": "PostalAddress",
+            streetAddress: `${address ? address : "No address available"}`,
+            addressLocality: `${city ? city : "No city available"} `,
+            addressRegion: `${state ? state : "No state available"}`,
+          },
+          propertyID: `${id}`,
+          propertyStatus: `${status ? status : "No status available"}`,
+          availabilityStarts: `${date ? date : "No date available"}`,
+          deposit: `${deposit ? deposit : "No deposit info"}`,
+          url: `${link ? link : "No link available"}`,
+        })}
+      </script>
+    </Helmet>
+    <a href={repoData?.details ? "/details" : link} target="blank" class="card-logo">
+      <img src={logo} class="thumb" alt="image of auctioneer website logo" />
+      <div class="status">{status ? status : "On Schedule"}</div>
+      <div class="date">Date: {date ? date : "no date displayed"}</div>
+      <div class="address">
+        Address: {address ? address : "no address displayed"}
+      </div>
+      {city ? (
+        <div class="address">City: {city ? city : null} </div>
+      ) : null}
+      {city ? (
+        <div class="address">State: {state ? state : null} </div>
+      ) : null}
+      <div class="deposit">
+        Deposit: {deposit ? deposit : "not available"}
+      </div>
+    </a>
+
+  </div>
+
+  <style>
+    .card {
+  margin-top: 10px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  max-width: 380px;
+  justify-content: space-around;
+  background-color: rgba(208, 210, 211, 0.041);
+  transition: transform 0.09s;
+  border-radius: 2%;
+  box-shadow: 0px 4px 30px rgba(0, 0, 0, 0.25);
+
+  // box-shadow: 1px 1px 0px 0px #cecbcb;
+}
+
+.card-logo {
+  filter: grayscale(1);
+}
+
+.card:hover {
+  transform: scale(
+    1.01
+  ); /* (150% zoom - Note: if the zoom is too large, it will go outside of the viewport) */
+}
+
+.date {
+  font-display: swap;
+  color: #020202;
+  font-family: "Quicksand", sans-serif;
+  // font-family: "Open Sans", Arial, sans-serif;
+  font-size: 1.5rem;
+  max-width: 280px;
+  grid-template-columns: repeat(auto-fill, minmax(425px, 1fr));
+  flex-direction: column;
+  margin-left: auto;
+  margin-right: auto;
+  display: flex;
+}
+
+.address {
+  color: #020202;
+  font-display: swap;
+  font-family: "Quicksand", sans-serif;
+  // font-family: "Press Start 2P", cursive;
+  // font-family: "Press Start 2P", cursive;
+  // font-family: "Open Sans", Arial, sans-serif;
+  font-size: 1.2rem;
+  max-width: 280px;
+  grid-template-columns: repeat(auto-fill, minmax(425px, 1fr));
+  flex-direction: column;
+  margin-left: auto;
+  margin-right: auto;
+  display: flex;
+}
+
+.status {
+  color: #222121;
+
+  margin-bottom: 4pt;
+  margin-top: 1rem;
+
+  font-family: "Press Start 2P", cursive;
+  font-display: swap;
+
+  font-weight: bolder;
+  font-size: 1.4rem;
+  max-width: 280px;
+  grid-template-columns: repeat(auto-fill, minmax(425px, 1fr));
+  flex-direction: column;
+  margin-left: auto;
+  margin-right: auto;
+  display: flex;
+}
+
+.deposit {
+  color: #020202;
+  font-family: "Quicksand", sans-serif;
+  font-display: swap;
+
+  font-size: 1.2rem;
+  max-width: 280px;
+  grid-template-columns: repeat(auto-fill, minmax(425px, 1fr));
+  flex-direction: column;
+  margin-left: auto;
+  margin-right: auto;
+  display: flex;
+  margin-bottom: 1rem;
+}
+  </style>

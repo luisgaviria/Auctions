@@ -9,6 +9,8 @@ type Auction struct {
 	City    string
 	Deposit string
 	Status  string
+	Logo    string
+	Url     string
 }
 
 func (auction *Auction) Print() {

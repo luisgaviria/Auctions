@@ -55,6 +55,8 @@ func ScrapHarvard() []Auction {
 						}
 					}
 				})
+				auction.Logo = `/baystate.webp`
+				auction.Url = `https://www.harvardauctioneers.com/`
 				auction.Print()
 				auctions = append(auctions, auction)
 			})

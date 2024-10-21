@@ -1,0 +1,61 @@
+---
+import { Navbar, Nav, Form, FormControl, NavDropdown, Button } from "react-bootstrap";
+---
+<Navbar className="navbar" collapseOnSelect expand="md" bg="light" variant="light" fixed="top">
+    {/* Logo po lewej stronie */}
+    <Navbar.Brand className="logo-nav-bar">
+      <a href="/">
+        <img
+          alt="icon"
+          class="d-inline-block"
+          src="https://i.postimg.cc/KYyDL9CX/letters-icon-25.png"
+        />
+      </a>
+    </Navbar.Brand>
+  
+    <Navbar.Toggle aria-controls="responsive-navbar-nav" />
+    <Navbar.Collapse id="responsive-navbar-nav">
+      {/* Nawigacja przesunięta na prawo */}
+      <Nav className="ml-auto nav-home">
+        <Nav.Link key="1" className="navbar-brand-text">Home</Nav.Link>
+        <Nav.Link key="2" className="navbar-brand-text">Favorites</Nav.Link>
+        <Nav.Link key="3" className="navbar-brand-text">About Us</Nav.Link>
+      </Nav>
+    </Navbar.Collapse>
+  </Navbar>
+  
+  <style>
+    .navbar {
+      width: 100%;
+      background-color: #f8f9fa;
+      box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
+    }
+  
+    .d-inline-block {
+      margin-left: 1rem;
+      border-radius: 49%;
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+    }
+  
+    .logo-nav-bar {
+      font-family: "Reenie Beanie", cursive;
+      font-size: 2em;
+      margin-left: 3rem;
+    }
+  
+    .nav-home {
+      margin-left: auto;
+    }
+  
+    .navbar-brand-text {
+      margin-right: 1rem;
+      margin-top: 5px;
+      text-align: center;
+      font-size: 1.4rem;
+      font-weight: 300;
+      color: #312f2f;
+    }
+  </style>
