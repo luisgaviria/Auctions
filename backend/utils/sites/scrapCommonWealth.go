@@ -1,16 +1,13 @@
 package sites
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/go-rod/rod"
 )
 
-func ScrapCommon() []Auction {
+func scrapTable(page *rod.Page) []Auction {
 	auctions := make([]Auction, 0)
-	page := rod.New().MustConnect().MustPage("https://www.commonwealthauctions.com/ma-auctions")
-	page.MustWaitStable()
 	tbody := page.MustElement("#ma_auctions > tbody")
 	trOdds, err := tbody.Elements("tr.odd")
 	trEvens, err := tbody.Elements("tr.even")
@@ -47,7 +44,22 @@ func ScrapCommon() []Auction {
 			Url:     *url,
 		})
 	}
+	return auctions
+}
 
-	fmt.Println(auctions)
-	return []Auction{}
+func ScrapCommon() []Auction {
+	auctions := make([]Auction, 0)
+	page := rod.New().MustConnect().MustPage("https://www.commonwealthauctions.com/ma-auctions")
+	page.MustWaitStable()
+
+	auctions = scrapTable(page)
+
+	nextButton := page.MustElement("#ma_auctions_next")
+	nextButton.MustClick()
+
+	auctions = append(auctions, scrapTable(page)...)
+
+	page.Browser().Close()
+
+	return auctions
 }

@@ -12,7 +12,9 @@ var selectOneAuctionThroughAddress = `SELECT * FROM auctions WHERE address = $1`
 
 func ScrapAllSites(db *sql.DB) {
 	auctions := sites.ScrapHarvard()
-	sites.ScrapCommon()
+	// auctions = append(auctions, sites.ScrapCommon()...)
+	sites.ScrapDanielP()
+
 	fmt.Println(auctions)
 	for _, auction := range auctions {
 		if auction, _ := db.Query(selectOneAuctionThroughAddress, auction.Street); auction != nil {
