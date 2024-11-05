@@ -18,9 +18,7 @@ func ScrapDanielP() []Auction {
 	c.OnHTML("html", func(e *colly.HTMLElement) {
 		e.ForEach("#dnn_ctr376_ModuleContent > div", func(i int, divElement *colly.HTMLElement) {
 			if i != 0 {
-				// fmt.Println(i)
 				imgUrl := divElement.DOM.Children().Find("img")
-				// need to get along with other sutff
 				attr, exists := imgUrl.Attr("src")
 				var image string //
 				if exists {
