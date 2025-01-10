@@ -19,7 +19,8 @@ func ScrapAllSites(db *sql.DB) {
 	// sites.ScrapApg()
 	// sites.ScrapPatriot()
 	// sites.ScrapBaystate()
-	fmt.Println(sites.ScrapDean())
+	// fmt.Println(sites.ScrapDean())
+	fmt.Print(sites.ScrapTache())
 
 	fmt.Println(auctions)
 	for _, auction := range auctions {
