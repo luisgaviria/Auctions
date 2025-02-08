@@ -12,7 +12,8 @@ var selectOneAuctionThroughAddress = `SELECT * FROM auctions WHERE address = $1`
 
 func ScrapAllSites(db *sql.DB) {
 	// auctions := sites.ScrapHarvard()
-	auctions := sites.ScrapJake()
+	// auctions := sites.ScrapJake()
+	auctions := sites.ScrapSri()
 	// auctions = append(auctions, sites.ScrapCommon()...)
 	// fmt.Println(sites.ScrapDanielP())
 	// fmt.Println(sites.ScrapDanielP())
@@ -20,7 +21,7 @@ func ScrapAllSites(db *sql.DB) {
 	// sites.ScrapPatriot()
 	// sites.ScrapBaystate()
 	// fmt.Println(sites.ScrapDean())
-	fmt.Print(sites.ScrapTache())
+	// fmt.Print(sites.ScrapTache())
 
 	fmt.Println(auctions)
 	for _, auction := range auctions {
