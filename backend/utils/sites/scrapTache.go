@@ -16,7 +16,7 @@ func ScrapTache() []Auction {
 
 	var data []Auction
 
-	logo := "https://auction-site-ma.herokuapp.com/auction_photos/tache.webp"
+	logo := "/tache.webp"
 
 	c.OnHTML("body > div > div > div > table > tbody", func(e *colly.HTMLElement) {
 		// Get all the tr elements inside the tbody

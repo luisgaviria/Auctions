@@ -43,6 +43,7 @@ func InitDb(url string) *sql.DB {
 func InitTables(db *sql.DB) {
 	pingErr := db.Ping()
 	if pingErr != nil {
+		log.Print("essa")
 		log.Fatal(pingErr.Error())
 		panic("Wrong connection with DB")
 	}

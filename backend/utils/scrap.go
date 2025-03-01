@@ -11,30 +11,38 @@ var insertAuction = `INSERT INTO auctions (address, city, state, time, logo, sta
 var selectOneAuctionThroughAddress = `SELECT * FROM auctions WHERE address = $1`
 
 func ScrapAllSites(db *sql.DB) {
-	// auctions := sites.ScrapHarvard()
-	// auctions := sites.ScrapJake()
-	// auctions := sites.ScrapSri()
-	// auctions := sites.ScrapSullivan()
 	auctions := sites.ScrapAMG()
-	// auctions = append(auctions, sites.ScrapCommon()...)
-	// fmt.Println(sites.ScrapDanielP())
-	// fmt.Println(sites.ScrapDanielP())
-	// sites.ScrapApg()
-	// sites.ScrapPatriot()
-	// sites.ScrapBaystate()
-	// fmt.Println(sites.ScrapDean())
-	// fmt.Print(sites.ScrapTache())
+	auctions = append(auctions, sites.ScrapApg()...)
+	auctions = append(auctions, sites.ScrapBaystate()...)
+	auctions = append(auctions, sites.ScrapAMG()...)
+	auctions = append(auctions, sites.ScrapCommon()...)
+	auctions = append(auctions, sites.ScrapDanielP()...)
+	auctions = append(auctions, sites.ScrapDean()...)
+	auctions = append(auctions, sites.ScrapHarvard()...)
+	auctions = append(auctions, sites.ScrapJake()...)
+	auctions = append(auctions, sites.ScrapPatriot()...)
+	auctions = append(auctions, sites.ScrapSri()...)
+	auctions = append(auctions, sites.ScrapSullivan()...)
+	auctions = append(auctions, sites.ScrapTache()...)
 
 	fmt.Println(auctions)
 	for _, auction := range auctions {
-		if auction, _ := db.Query(selectOneAuctionThroughAddress, auction.Street); auction != nil {
-			log.Println("Auction exist!")
+		var exists int
+		err := db.QueryRow(selectOneAuctionThroughAddress, auction.Street).Scan(&exists)
+		if err != nil && err != sql.ErrNoRows {
+			log.Println(err)
 			continue
 		}
-		if _, err := db.Query(insertAuction, auction.Street, auction.City, "Massachusetts", auction.Time, auction.Logo, auction.Status, auction.Url, auction.Date, auction.Deposit, "0", "0"); err != nil {
-			log.Println(err)
-			return
+		if exists == 1 {
+			log.Println("Auction exists!")
+			continue
 		}
-		log.Println("Placed auction!")
+
+		if _, err := db.Exec(insertAuction, auction.Street, auction.City, "Massachusetts", auction.Time, auction.Logo, auction.Status, auction.Url, auction.Date, auction.Deposit, "0", "0"); err != nil {
+			log.Print(auction)
+			log.Println(err)
+		} else {
+			log.Println("Placed auction!")
+		}
 	}
 }

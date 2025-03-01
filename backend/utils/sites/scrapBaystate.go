@@ -2,7 +2,6 @@ package sites
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"regexp"
 	"strings"
@@ -99,6 +98,5 @@ func ScrapBaystate() []Auction {
 		filteredData = append(filteredData, auction)
 	}
 
-	fmt.Print(filteredData)
 	return filteredData
 } // add pagination here

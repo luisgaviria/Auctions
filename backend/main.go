@@ -15,12 +15,22 @@ import (
 func main() {
 	router := mux.NewRouter().StrictSlash(true)
 
-	godotenv.Load()
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 
-	db := utils.InitDb(os.Getenv("DB_URL"))
-	utils.ScrapAllSites(db)
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatal("DB_URL is not set in the environment")
+	}
+	log.Println("Connecting to database at:", dbURL)
+
+	db := utils.InitDb(dbURL)
 
 	utils.InitTables(db)
+
+	utils.ScrapAllSites(db)
 
 	authController := controllers.AuthController{DB: db}
 	auctionController := controllers.AuctionsController{DB: db}
