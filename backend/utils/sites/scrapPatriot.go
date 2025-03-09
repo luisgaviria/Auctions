@@ -2,6 +2,7 @@ package sites
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -40,11 +41,15 @@ func ScrapPatriot() []Auction {
 			status = "On Schedule"
 		}
 
+		// Parse and format the date
+		formattedDate, formattedTime := parseDateAndTimePatriot(date)
+
 		auctions = append(auctions, Auction{
 			Status:  status,
 			Street:  address,
 			Url:     href,
-			Date:    date,
+			Date:    formattedDate,
+			Time:    formattedTime,
 			Deposit: deposit,
 			Logo:    logo,
 		})
@@ -53,4 +58,26 @@ func ScrapPatriot() []Auction {
 	}
 	page.Browser().Close()
 	return auctions
+}
+
+func parseDateAndTimePatriot(dateTimeStr string) (string, string) {
+	// Regular expression to match "Monday Mar 10 @ 11:00 am"
+	re := regexp.MustCompile(`(\w+ \w+ \d+) @ (\d+:\d+ [ap]m)`)
+	match := re.FindStringSubmatch(dateTimeStr)
+
+	if len(match) == 3 {
+		dateStr := strings.TrimSpace(match[1])
+		timeStr := strings.TrimSpace(match[2])
+		parsedDate, err := time.Parse("Monday Jan 2", dateStr)
+		if err != nil {
+			fmt.Println("Error parsing date:", err)
+			return "", timeStr
+		}
+		// Add the current year to the parsed date
+		currentYear := time.Now().Year()
+		parsedDate = parsedDate.AddDate(currentYear-parsedDate.Year(), 0, 0)
+		formattedDate := parsedDate.Format("2006-01-02")
+		return formattedDate, timeStr
+	}
+	return "", "" // Return empty if no match
 }

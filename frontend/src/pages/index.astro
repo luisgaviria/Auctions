@@ -14,7 +14,7 @@ const auctions = response.data.auctions
 ---
 
 <Layout title="Welcome to Astro.">
-	{auctions.map(auction=>{
+	{auctions.map((auction: any)=>{
 		return (
 			<Card repoData={{details: "test"}} link={auction.link} date={auction.date} address={auction.address} city={auction.city} state={auction.state} status={auction.state} deposit={auction.deposit} logo={auction.logo}/>
 		)

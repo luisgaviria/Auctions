@@ -35,7 +35,7 @@ func ScrapSullivan() []Auction {
 
 		// Date and Time (combined in one <td>, need to split)
 		dateAndTime := s.Find("td:nth-child(1) a").Text()
-		auction.Date, auction.Time = parseDateAndTime(dateAndTime)
+		auction.Date, auction.Time = parseDateAndTimeSullivan(dateAndTime)
 
 		// Status
 		auction.Status = strings.TrimSpace(s.Find("td:nth-child(2) span").Text())
@@ -62,7 +62,7 @@ func ScrapSullivan() []Auction {
 	return auctions
 }
 
-func parseDateAndTime(dateTimeStr string) (string, string) {
+func parseDateAndTimeSullivan(dateTimeStr string) (string, string) {
 	// Regular expression to match "Wed. Feb. 12, 2025 at 12 pm"  or with different month, day and time
 	re := regexp.MustCompile(`(\w{3}\.?\s+\w{3}\.?\s+\d{1,2},\s+\d{4})\s+at\s+(\d{1,2}\s*[ap]m)`)
 	match := re.FindStringSubmatch(dateTimeStr)
@@ -72,9 +72,23 @@ func parseDateAndTime(dateTimeStr string) (string, string) {
 	match2 := re2.FindStringSubmatch(dateTimeStr)
 
 	if len(match) == 3 {
-		return strings.TrimSpace(match[1]), strings.TrimSpace(match[2])
+		dateStr := strings.TrimSpace(match[1])
+		timeStr := strings.TrimSpace(match[2])
+		parsedDate, err := time.Parse("Mon. Jan. 2, 2006", dateStr)
+		if err != nil {
+			return "", timeStr
+		}
+		formattedDate := parsedDate.Format("2006-01-02")
+		return formattedDate, timeStr
 	} else if len(match2) == 3 {
-		return strings.TrimSpace(match2[1]), strings.TrimSpace(match2[2])
+		dateStr := strings.TrimSpace(match2[1])
+		timeStr := strings.TrimSpace(match2[2])
+		parsedDate, err := time.Parse("Mon. Jan. 2", dateStr)
+		if err != nil {
+			return "", timeStr
+		}
+		formattedDate := parsedDate.Format("2006-01-02")
+		return formattedDate, timeStr
 	}
 	return "", "" // Return empty if no match
 }
