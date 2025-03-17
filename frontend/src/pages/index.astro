@@ -4,9 +4,9 @@ import Card from "../components/Card.astro";
 import axios from "axios"; 
 
 const response = await axios.get("http://localhost:8000/auctions", {
-	headers: {
-		"Content-Type": "application/json"
-	}
+    headers: {
+        "Content-Type": "application/json"
+    }
 })
  
 
@@ -14,12 +14,21 @@ const auctions = response.data.auctions
 ---
 
 <Layout title="Welcome to Astro.">
-	{auctions.map((auction: any)=>{
-		return (
-			<Card repoData={{details: "test"}} link={auction.link} date={auction.date} address={auction.address} city={auction.city} state={auction.state} status={auction.state} deposit={auction.deposit} logo={auction.logo}/>
-		)
-	})}
+    <div class="container">
+        <div class="card-grid">
+            {auctions.map((auction: any)=>{
+                return (
+                    <Card repoData={{details: "test"}} link={auction.link} date={auction.date} address={auction.address} city={auction.city} state={auction.state} status={auction.state} deposit={auction.deposit} logo={auction.logo}/>
+                )
+            })}
+        </div>
+    </div>
 </Layout>
 
 <style>
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
 </style>

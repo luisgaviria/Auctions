@@ -1,6 +1,6 @@
 ---
 import {Helmet} from "react-helmet";
-const {repoData, link, date, address, status,  city, state, deposit, logo} = Astro.props;
+const {repoData, link, date, address, status, city, state, deposit, logo} = Astro.props;
 ---
 
 <div class="card">
@@ -44,96 +44,55 @@ const {repoData, link, date, address, status,  city, state, deposit, logo} = Ast
         Deposit: {deposit ? deposit : "not available"}
       </div>
     </a>
+</div>
 
-  </div>
-
-  <style>
-    .card {
-  margin-top: 10px;
-  margin-left: auto;
-  margin-right: auto;
-  width: 100%;
-  max-width: 380px;
-  justify-content: space-around;
-  background-color: rgba(208, 210, 211, 0.041);
-  transition: transform 0.09s;
-  border-radius: 2%;
-  box-shadow: 0px 4px 30px rgba(0, 0, 0, 0.25);
-
-  // box-shadow: 1px 1px 0px 0px #cecbcb;
-}
-
-.card-logo {
-  filter: grayscale(1);
-}
-
-.card:hover {
-  transform: scale(
-    1.01
-  ); /* (150% zoom - Note: if the zoom is too large, it will go outside of the viewport) */
-}
-
-.date {
-  font-display: swap;
-  color: #020202;
-  font-family: "Quicksand", sans-serif;
-  // font-family: "Open Sans", Arial, sans-serif;
-  font-size: 1.5rem;
-  max-width: 280px;
-  grid-template-columns: repeat(auto-fill, minmax(425px, 1fr));
-  flex-direction: column;
-  margin-left: auto;
-  margin-right: auto;
-  display: flex;
-}
-
-.address {
-  color: #020202;
-  font-display: swap;
-  font-family: "Quicksand", sans-serif;
-  // font-family: "Press Start 2P", cursive;
-  // font-family: "Press Start 2P", cursive;
-  // font-family: "Open Sans", Arial, sans-serif;
-  font-size: 1.2rem;
-  max-width: 280px;
-  grid-template-columns: repeat(auto-fill, minmax(425px, 1fr));
-  flex-direction: column;
-  margin-left: auto;
-  margin-right: auto;
-  display: flex;
-}
-
-.status {
-  color: #222121;
-
-  margin-bottom: 4pt;
-  margin-top: 1rem;
-
-  font-family: "Press Start 2P", cursive;
-  font-display: swap;
-
-  font-weight: bolder;
-  font-size: 1.4rem;
-  max-width: 280px;
-  grid-template-columns: repeat(auto-fill, minmax(425px, 1fr));
-  flex-direction: column;
-  margin-left: auto;
-  margin-right: auto;
-  display: flex;
-}
-
-.deposit {
-  color: #020202;
-  font-family: "Quicksand", sans-serif;
-  font-display: swap;
-
-  font-size: 1.2rem;
-  max-width: 280px;
-  grid-template-columns: repeat(auto-fill, minmax(425px, 1fr));
-  flex-direction: column;
-  margin-left: auto;
-  margin-right: auto;
-  display: flex;
-  margin-bottom: 1rem;
-}
+<style>
+  .card {
+    margin-top: 20px;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+    max-width: 380px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  
+  .card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0px 6px 20px rgba(0, 0, 0, 0.15);
+  }
+  
+  .card-logo {
+    display: block;
+    text-align: center;
+    padding: 1rem;
+  }
+  
+  .thumb {
+    width: 100%;
+    height: 200px; /* Set a fixed height for consistency */
+    object-fit: cover; /* Ensures the image scales properly without distortion */
+    border-bottom: 1px solid #f0f0f0;
+  }
+  
+  .status {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #007bff;
+    margin: 1rem 0;
+    text-align: center;
+  }
+  
+  .date, .address, .deposit {
+    font-size: 1rem;
+    color: #555;
+    margin: 0.5rem 1rem;
+  }
+  
+  .deposit {
+    font-weight: bold;
+  }
   </style>
