@@ -27,7 +27,7 @@ const {repoData, link, date, address, status, city, state, deposit, logo} = Astr
         })}
       </script>
     </Helmet>
-    <a href={repoData?.details ? "/details" : link} target="blank" class="card-logo">
+    <a href={link} target="blank" class="card-logo">
       <img src={logo} class="thumb" alt="image of auctioneer website logo" />
       <div class="status">{status ? status : "On Schedule"}</div>
       <div class="date">Date: {date ? date : "no date displayed"}</div>

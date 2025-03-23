@@ -8,12 +8,11 @@ const response = await axios.get("http://localhost:8000/auctions", {
         "Content-Type": "application/json"
     }
 })
- 
 
 const auctions = response.data.auctions
 ---
 
-<Layout title="Welcome to Astro.">
+<Layout title="Auctions">
     <div class="container">
         <div class="card-grid">
             {auctions.map((auction: any)=>{

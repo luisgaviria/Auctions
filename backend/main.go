@@ -15,7 +15,10 @@ import (
 func main() {
 	router := mux.NewRouter().StrictSlash(true)
 
-	err := godotenv.Load()
+	var err error
+	if os.Getenv("ENV") != "PROD" {
+		err = godotenv.Load()
+	}
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
