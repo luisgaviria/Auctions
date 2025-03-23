@@ -49,6 +49,11 @@ func main() {
 	// auctionsSubrouter.Use(middleware.JwtValidator)
 	auctionsSubrouter.HandleFunc("/", auctionController.GetAuctions)
 
+	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8000" // Default to port 8000 if PORT is not set
