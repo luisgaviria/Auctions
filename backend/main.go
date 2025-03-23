@@ -33,9 +33,9 @@ func main() {
 
 	utils.InitTables(db)
 
-	go func() {
-		utils.ScrapAllSites(db)
-	}()
+	// go func() {
+	// 	utils.ScrapAllSites(db)
+	// }()
 
 	authController := controllers.AuthController{DB: db}
 	auctionController := controllers.AuctionsController{DB: db}
