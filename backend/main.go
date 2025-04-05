@@ -33,9 +33,9 @@ func main() {
 
 	utils.InitTables(db)
 
-	go func() {
-		utils.ScrapAllSites(db)
-	}()
+	// go func() {
+	// 	utils.ScrapAllSites(db)
+	// }()
 
 	authController := controllers.AuthController{DB: db}
 	auctionController := controllers.AuctionsController{DB: db}
@@ -49,14 +49,24 @@ func main() {
 	// auctionsSubrouter.Use(middleware.JwtValidator)
 	auctionsSubrouter.HandleFunc("/", auctionController.GetAuctions)
 
+	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8000" // Default to port 8000 if PORT is not set
+	}
+
 	srv := &http.Server{
 		Handler: router,
-		Addr:    "127.0.0.1:8000",
+		Addr:    ":" + port,
 		// Good practice: enforce timeouts for servers you create!
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
 
+	log.Printf("Server is running on port %s", port)
 	log.Fatal(srv.ListenAndServe())
-
 }
