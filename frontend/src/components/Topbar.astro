@@ -3,23 +3,40 @@ import { Navbar, Nav } from "react-bootstrap";
 ---
 <Navbar className="navbar" collapseOnSelect expand="md" bg="light" variant="light" fixed="top">
     <Navbar.Brand className="logo-nav-bar">
-      <a href="/">
-        <img
-          alt="icon"
-          class="d-inline-block"
-          src="https://i.postimg.cc/KYyDL9CX/letters-icon-25.png"
-        />
-      </a>
+        <a href="/">
+            <img alt="icon" class="d-inline-block" src="https://i.postimg.cc/KYyDL9CX/letters-icon-25.png" />
+        </a>
     </Navbar.Brand>
-  
+
     <Navbar.Collapse id="responsive-navbar-nav">
-      <Nav className="ml-auto nav-home">
-        <Nav.Link href="/" key="1" className="navbar-brand-text">Home</Nav.Link>
-        <Nav.Link href="/" key="2" className="navbar-brand-text">Favorites</Nav.Link>
-        <Nav.Link href="/about" key="3" className="navbar-brand-text">About Us</Nav.Link>
-      </Nav>
+        <Nav className="ml-auto nav-home">
+            <Nav.Link href="/" key="1" className="navbar-brand-text">Home</Nav.Link>
+            <Nav.Link href="/" key="2" className="navbar-brand-text">Favorites</Nav.Link>
+            <Nav.Link href="/about" key="3" className="navbar-brand-text">About Us</Nav.Link>
+            <div class="auth-links" id="authLinks">
+                <Nav.Link href="/login" key="4" className="navbar-brand-text login-link">Login</Nav.Link>
+                <Nav.Link href="/register" key="5" className="navbar-brand-text register-link">Register</Nav.Link>
+            </div>
+        </Nav>
     </Navbar.Collapse>
 </Navbar>
+
+<script>
+// Check if user is logged in
+const token = localStorage.getItem('jwt_token');
+const authLinks = document.getElementById('authLinks');
+
+if (token) {
+    authLinks.innerHTML = `
+        <a href="#" class="navbar-brand-text logout-link" onclick="logout()">Logout</a>
+    `;
+}
+
+function logout() {
+    localStorage.removeItem('jwt_token');
+    window.location.href = '/login';
+}
+</script>
   
 <style>
 .navbar {
@@ -57,5 +74,19 @@ import { Navbar, Nav } from "react-bootstrap";
 
 .navbar-brand-text:hover {
   color: #007bff;
+}
+.auth-links {
+    display: flex;
+    gap: 1rem;
+}
+
+.login-link, .register-link, .logout-link {
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+}
+
+.login-link:hover, .register-link:hover, .logout-link:hover {
+    background-color: #f8f9fa;
 }
 </style>
