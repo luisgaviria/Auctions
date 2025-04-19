@@ -1,50 +1,81 @@
 ---
-import {Helmet} from "react-helmet";
-const {repoData, link, date, address, status, city, state, deposit, logo} = Astro.props;
+const { link, date, address, city, state, status, deposit, logo, id } = Astro.props;
+const apiUrl = import.meta.env.API_URL;
 ---
 
 <div class="card">
-    <Helmet>
-      <meta name="title" content="" />
-      <meta name="description" content="" />
-      <script type="application/ld+json">
-        {JSON.stringify({
-          "@context": "https://schema.org",
-          "@type": "RealEstateListing",
-          name: `${id}`,
-          image: `${logo ? logo : "No Image available"}`,
-          address: {
+  <script type="application/ld+json" set:html={JSON.stringify({
+    "@context": "http://schema.org",
+    "@type": "Event",
+    "name": "Auction",
+    "startDate": date,
+    "location": {
+        "@type": "Place",
+        "address": {
             "@type": "PostalAddress",
-            streetAddress: `${address ? address : "No address available"}`,
-            addressLocality: `${city ? city : "No city available"} `,
-            addressRegion: `${state ? state : "No state available"}`,
-          },
-          propertyID: `${id}`,
-          propertyStatus: `${status ? status : "No status available"}`,
-          availabilityStarts: `${date ? date : "No date available"}`,
-          deposit: `${deposit ? deposit : "No deposit info"}`,
-          url: `${link ? link : "No link available"}`,
-        })}
-      </script>
-    </Helmet>
-    <a href={link} target="blank" class="card-logo">
-      <img src={logo} class="thumb" alt="image of auctioneer website logo" />
-      <div class="status">{status ? status : "On Schedule"}</div>
-      <div class="date">Date: {date ? date : "no date displayed"}</div>
-      <div class="address">
-        Address: {address ? address : "no address displayed"}
-      </div>
-      {city ? (
-        <div class="address">City: {city ? city : null} </div>
-      ) : null}
-      {city ? (
-        <div class="address">State: {state ? state : null} </div>
-      ) : null}
-      <div class="deposit">
-        Deposit: {deposit ? deposit : "not available"}
-      </div>
-    </a>
+            "streetAddress": address,
+            "addressLocality": city,
+            "addressRegion": state
+        }
+    },
+    "url": link || "No link available",
+})}>
+</script>
+    <div class="card-header">
+        <a href={link} target="blank" class="card-logo">
+            <img src={logo} class="thumb" alt="image of auctioneer website logo" />
+        </a>
+        <button class="favorite-btn" data-auction-id={id}>
+            <i class="far fa-heart"></i>
+        </button>
+    </div>
+    <div class="status">{status ? status : "On Schedule"}</div>
+    <div class="date">Date: {date ? date : "no date displayed"}</div>
+    <div class="address">Address: {address ? address : "no address displayed"}</div>
+    {city && <div class="address">City: {city}</div>}
+    {state && <div class="address">State: {state}</div>}
+    <div class="deposit">Deposit: {deposit ? deposit : "not available"}</div>
 </div>
+
+<script define:vars={{ apiUrl }}>
+  document.addEventListener('DOMContentLoaded', () => {
+      const favoriteButtons = document.querySelectorAll('.favorite-btn');
+      
+      favoriteButtons.forEach(button => {
+          button.addEventListener('click', async (e) => {
+              e.preventDefault();
+              
+              if (!localStorage.getItem('jwt_token')) {
+                  window.location.href = '/login';
+                  return;
+              }
+  
+              const auctionId = button.dataset.auctionId;
+              const icon = button.querySelector('i');
+              const isFavorited = icon.classList.contains('fas');
+  
+              try {
+                  const response = await fetch(`${apiUrl}/favorites/${isFavorited ? 'remove' : 'add'}`, {
+                      method: 'POST',
+                      headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`
+                      },
+                      body: JSON.stringify({ auction_id: auctionId }),
+                      credentials: 'include'
+                  });
+  
+                  if (response.ok) {
+                      icon.classList.toggle('far');
+                      icon.classList.toggle('fas');
+                  }
+              } catch (error) {
+                  console.error('Error updating favorite:', error);
+              }
+          });
+      });
+  });
+  </script>
 
 <style>
   .card {
@@ -95,4 +126,28 @@ const {repoData, link, date, address, status, city, state, deposit, logo} = Astr
   .deposit {
     font-weight: bold;
   }
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+}
+
+.favorite-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.5rem;
+    color: #ff4b4b;
+    transition: transform 0.2s ease;
+}
+
+.favorite-btn:hover {
+    transform: scale(1.1);
+}
+
+.fas.fa-heart {
+    color: #ff4b4b;
+}
   </style>

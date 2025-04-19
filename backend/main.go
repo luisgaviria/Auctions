@@ -2,6 +2,7 @@ package main
 
 import (
 	"backendAuction/controllers"
+	"backendAuction/middleware"
 	"backendAuction/utils"
 	"log"
 	"net/http"
@@ -59,13 +60,19 @@ func main() {
 
 	authController := controllers.AuthController{DB: db}
 	auctionController := controllers.AuctionsController{DB: db}
+	favoritesController := controllers.FavoritesController{DB: db}
 
 	authSubrouter := router.PathPrefix("/auth").Subrouter()
 	authSubrouter.HandleFunc("/signup", authController.SignUp).Methods("POST", "OPTIONS")
 	authSubrouter.HandleFunc("/login", authController.Login).Methods("POST", "OPTIONS")
+	authSubrouter.HandleFunc("/logout", authController.Logout).Methods("POST", "OPTIONS")
 
 	auctionsSubrouter := router.PathPrefix("/auctions").Subrouter()
 	auctionsSubrouter.HandleFunc("/", auctionController.GetAuctions).Methods("GET", "OPTIONS")
+
+	router.HandleFunc("/favorites/add", middleware.AuthMiddleware(favoritesController.AddFavorite)).Methods("POST", "OPTIONS")
+	router.HandleFunc("/favorites/remove", middleware.AuthMiddleware(favoritesController.RemoveFavorite)).Methods("POST", "OPTIONS")
+	router.HandleFunc("/favorites", middleware.AuthMiddleware(favoritesController.GetFavorites)).Methods("GET", "OPTIONS")
 
 	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

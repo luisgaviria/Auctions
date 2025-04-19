@@ -116,6 +116,24 @@ func (c *AuthController) Login(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
+func (c *AuthController) Logout(w http.ResponseWriter, r *http.Request) {
+	// Clear the token cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   false, // Set to true in production
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Successfully logged out",
+	})
+}
+
 func createToken(email string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": email,

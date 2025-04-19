@@ -1,0 +1,75 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Card from "../components/Card.astro";
+
+const apiUrl = import.meta.env.API_URL;
+---
+
+<Layout title="My Favorites">
+    <div class="container">
+        <h1>My Favorite Auctions</h1>
+        <div class="card-grid" id="favorites-container">
+            <!-- Favorites will be loaded here -->
+        </div>
+    </div>
+</Layout>
+
+<script define:vars={{ apiUrl }}>
+async function loadFavorites() {
+    if (!localStorage.getItem('jwt_token')) {
+        window.location.href = '/login';
+        return;
+    }
+
+    try {
+        const response = await fetch(`${apiUrl}/favorites`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`
+            },
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const container = document.getElementById('favorites-container');
+            
+            if (data.auctions.length === 0) {
+                container.innerHTML = '<p>No favorite auctions yet.</p>';
+                return;
+            }
+
+            container.innerHTML = data.auctions.map(auction => `
+                <Card 
+                    id="${auction.id}"
+                    link="${auction.link}"
+                    date="${auction.date}"
+                    address="${auction.address}"
+                    city="${auction.city}"
+                    state="${auction.state}"
+                    status="${auction.status}"
+                    deposit="${auction.deposit}"
+                    logo="${auction.logo}"
+                />
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Error loading favorites:', error);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadFavorites);
+</script>
+
+<style>
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+    padding: 2rem 0;
+}
+
+h1 {
+    text-align: center;
+    margin: 2rem 0;
+}
+</style>

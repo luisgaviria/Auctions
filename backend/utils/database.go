@@ -12,7 +12,7 @@ var createUsersTable = `CREATE TABLE IF NOT EXISTS users (
 	email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
 	createdAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
-	);`
+);`
 
 var createAuctionsTable = `CREATE TABLE IF NOT EXISTS auctions (
 	id SERIAL PRIMARY KEY,
@@ -28,7 +28,16 @@ var createAuctionsTable = `CREATE TABLE IF NOT EXISTS auctions (
 	lat VARCHAR(255) NOT NULL,
 	lng VARCHAR(255) NOT NULL,
 	createdAt TIMESTAMPTZ NOT NULL DEFAULT NOW()
-	);`
+);`
+
+var createFavoritesTable = `
+CREATE TABLE IF NOT EXISTS favorites (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    auction_id INTEGER REFERENCES auctions(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, auction_id)
+);`
 
 func InitDb(url string) *sql.DB {
 	db, err := sql.Open("postgres", url)
@@ -56,5 +65,12 @@ func InitTables(db *sql.DB) {
 		log.Fatal(err.Error())
 		panic("Wrong Query For Auctions")
 	}
+
+	_, err = db.Exec(createFavoritesTable)
+	if err != nil {
+		log.Fatal(err.Error())
+		panic("Wrong Query For Favorites")
+	}
+
 	log.Print("Succesfully initialized tables!")
 }
