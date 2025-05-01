@@ -20,19 +20,19 @@ type GetAuctionsResponse struct {
 }
 
 type AuctionModel struct {
-	Id        string    `json:"id", db:"id"`
-	Address   string    `json:"address", db:"address"`
-	City      string    `json:"city", db:"city"`
-	State     string    `json:"state", db:"state"`
-	Time      string    `json:"time", db:"time"`
-	Logo      string    `json:"logo", db:"logo"`
-	Status    string    `json:"status", db:"status"`
-	Link      string    `json:"link", db:"link"`
-	Date      time.Time `json:"date", db:"date"`
-	Deposit   string    `json:"deposit", db:"deposit"`
-	Lat       string    `json:"lat", db:"lat"`
-	Lng       string    `json:"lng", db:"lng"`
-	Createdat time.Time `json:"createdAt", db:"createdat"`
+	Id        int       `json:"id"`
+	Address   string    `json:"address"`
+	City      string    `json:"city"`
+	State     string    `json:"state"`
+	Time      string    `json:"time"`
+	Logo      string    `json:"logo"`
+	Status    string    `json:"status"`
+	Link      string    `json:"link"`
+	Date      time.Time `json:"date"`
+	Deposit   string    `json:"deposit"`
+	Lat       string    `json:"lat"`
+	Lng       string    `json:"lng"`
+	Createdat time.Time `json:"createdAt"`
 }
 
 func (c *AuctionsController) GetAuctions(w http.ResponseWriter, req *http.Request) {

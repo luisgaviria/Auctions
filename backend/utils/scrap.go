@@ -7,7 +7,11 @@ import (
 	"log"
 )
 
-var insertAuction = `INSERT INTO auctions (address, city, state, time, logo, status, link, date, deposit, lat, lng) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);`
+var insertAuction = `
+    INSERT INTO auctions (address, city, state, time, logo, status, link, date, deposit, lat, lng) 
+    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+    RETURNING id;`
+
 var selectOneAuctionThroughAddress = `SELECT * FROM auctions WHERE address = $1`
 
 func ScrapAllSites(db *sql.DB) {
@@ -38,11 +42,25 @@ func ScrapAllSites(db *sql.DB) {
 			continue
 		}
 
-		if _, err := db.Exec(insertAuction, auction.Street, auction.City, "Massachusetts", auction.Time, auction.Logo, auction.Status, auction.Url, auction.Date, auction.Deposit, "0", "0"); err != nil {
+		var auctionID int
+		err = db.QueryRow(insertAuction,
+			auction.Street,
+			auction.City,
+			"Massachusetts",
+			auction.Time,
+			auction.Logo,
+			auction.Status,
+			auction.Url,
+			auction.Date,
+			auction.Deposit,
+			"0",
+			"0").Scan(&auctionID)
+
+		if err != nil {
 			log.Print(auction)
 			log.Println(err)
 		} else {
-			log.Println("Placed auction!")
+			log.Printf("Placed auction with ID: %d!", auctionID)
 		}
 	}
 }

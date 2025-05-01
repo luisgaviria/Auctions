@@ -2,35 +2,12 @@ package middleware
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 )
-
-func JwtValidator(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, _ := r.Cookie("token")
-		tokenEncoded := cookie.Value
-		decodedToken, err := jwt.Parse(tokenEncoded, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-			}
-			return []byte(os.Getenv("JWT_SECRET")), nil
-		})
-		if claims, ok := decodedToken.Claims.(jwt.MapClaims); ok && decodedToken.Valid {
-			ctx := context.WithValue(r.Context(), "props", claims)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		} else {
-			log.Println(err)
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Unauthorized"))
-		}
-	})
-}
 
 func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -62,8 +39,8 @@ func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-			// Add user information to request context
-			ctx := context.WithValue(r.Context(), "user_id", claims["sub"])
+			// Add user email to request context using the same key as in the token claims
+			ctx := context.WithValue(r.Context(), "sub", claims["sub"])
 			next.ServeHTTP(w, r.WithContext(ctx))
 		} else {
 			http.Error(w, "Invalid token claims", http.StatusUnauthorized)

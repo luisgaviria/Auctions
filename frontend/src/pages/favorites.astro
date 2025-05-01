@@ -2,7 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import Card from "../components/Card.astro";
 
-const apiUrl = import.meta.env.API_URL;
+const apiUrl = import.meta.env.VITE_API_URL;
 ---
 
 <Layout title="My Favorites">
@@ -34,23 +34,66 @@ async function loadFavorites() {
             const container = document.getElementById('favorites-container');
             
             if (data.auctions.length === 0) {
-                container.innerHTML = '<p>No favorite auctions yet.</p>';
+                container.innerHTML = '<p class="no-favorites">No favorite auctions yet.</p>';
                 return;
             }
 
-            container.innerHTML = data.auctions.map(auction => `
-                <Card 
-                    id="${auction.id}"
-                    link="${auction.link}"
-                    date="${auction.date}"
-                    address="${auction.address}"
-                    city="${auction.city}"
-                    state="${auction.state}"
-                    status="${auction.status}"
-                    deposit="${auction.deposit}"
-                    logo="${auction.logo}"
-                />
-            `).join('');
+            // Create and append Card components
+            data.auctions.forEach(auction => {
+                const cardElement = document.createElement('div');
+                cardElement.className = 'card-wrapper';
+                cardElement.innerHTML = `
+                    <div class="card">
+                        <div class="card-header">
+                            <a href="${auction.link}" target="_blank" rel="noopener noreferrer" class="card-logo">
+                                <img src="${auction.logo}" class="thumb" alt="auction website logo" />
+                            </a>
+                            <button class="favorite-btn" data-auction-id="${auction.id}">
+                                <i class="fas fa-heart"></i>
+                            </button>
+                        </div>
+                        <div class="status">${auction.status || "On Schedule"}</div>
+                        <div class="date">Date: ${auction.date || "no date displayed"}</div>
+                        <div class="address">Address: ${auction.address || "no address displayed"}</div>
+                        ${auction.city ? `<div class="address">City: ${auction.city}</div>` : ''}
+                        ${auction.state ? `<div class="address">State: ${auction.state}</div>` : ''}
+                        <div class="deposit">Deposit: ${auction.deposit || "not available"}</div>
+                    </div>
+                `;
+                container.appendChild(cardElement);
+            });
+
+            // Add event listeners to favorite buttons
+            document.querySelectorAll('.favorite-btn').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const auctionId = parseInt(button.dataset.auctionId, 10);
+                    
+                    try {
+                        const response = await fetch(`${apiUrl}/favorites/remove`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`
+                            },
+                            body: JSON.stringify({ auction_id: auctionId }),
+                            credentials: 'include'
+                        });
+
+                        if (response.ok) {
+                            // Remove the card from the UI
+                            button.closest('.card-wrapper').remove();
+                            
+                            // Check if there are no more favorites
+                            if (container.children.length === 0) {
+                                container.innerHTML = '<p class="no-favorites">No favorite auctions yet.</p>';
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error removing favorite:', error);
+                    }
+                });
+            });
         }
     } catch (error) {
         console.error('Error loading favorites:', error);
@@ -61,6 +104,18 @@ document.addEventListener('DOMContentLoaded', loadFavorites);
 </script>
 
 <style>
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+h1 {
+    text-align: center;
+    margin: 2rem 0;
+    color: #333;
+}
+
 .card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -68,8 +123,84 @@ document.addEventListener('DOMContentLoaded', loadFavorites);
     padding: 2rem 0;
 }
 
-h1 {
+.no-favorites {
     text-align: center;
-    margin: 2rem 0;
+    color: #666;
+    font-size: 1.2rem;
+    grid-column: 1 / -1;
+    padding: 2rem;
+}
+
+.card-wrapper {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Reuse existing card styles */
+.card {
+    margin-top: 20px;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+    max-width: 380px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0px 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+}
+
+.favorite-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.5rem;
+    color: #ff4b4b;
+    transition: transform 0.2s ease;
+}
+
+.favorite-btn:hover {
+    transform: scale(1.1);
+}
+
+.fas.fa-heart {
+    color: #ff4b4b;
+}
+
+.status, .date, .address, .deposit {
+    padding: 0.5rem 1rem;
+    color: #333;
+}
+
+.status {
+    font-weight: bold;
+    color: #007bff;
+}
+
+.deposit {
+    font-weight: bold;
+    margin-bottom: 1rem;
 }
 </style>

@@ -23,7 +23,7 @@ func main() {
 
 	router := mux.NewRouter().StrictSlash(true)
 
-	// CORS middleware with environment variables already loaded
+	// CORS middleware
 	router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			frontendURL := os.Getenv("FRONTEND_URL")
@@ -54,31 +54,34 @@ func main() {
 	db := utils.InitDb(dbURL)
 	utils.InitTables(db)
 
-	go func() {
-		utils.ScrapAllSites(db)
-	}()
-
+	// Initialize controllers
 	authController := controllers.AuthController{DB: db}
 	auctionController := controllers.AuctionsController{DB: db}
 	favoritesController := controllers.FavoritesController{DB: db}
 
+	// Auth routes
 	authSubrouter := router.PathPrefix("/auth").Subrouter()
 	authSubrouter.HandleFunc("/signup", authController.SignUp).Methods("POST", "OPTIONS")
 	authSubrouter.HandleFunc("/login", authController.Login).Methods("POST", "OPTIONS")
 	authSubrouter.HandleFunc("/logout", authController.Logout).Methods("POST", "OPTIONS")
 
+	// Auctions routes
 	auctionsSubrouter := router.PathPrefix("/auctions").Subrouter()
-	auctionsSubrouter.HandleFunc("/", auctionController.GetAuctions).Methods("GET", "OPTIONS")
+	auctionsSubrouter.HandleFunc("", auctionController.GetAuctions).Methods("GET", "OPTIONS")
 
-	router.HandleFunc("/favorites/add", middleware.AuthMiddleware(favoritesController.AddFavorite)).Methods("POST", "OPTIONS")
-	router.HandleFunc("/favorites/remove", middleware.AuthMiddleware(favoritesController.RemoveFavorite)).Methods("POST", "OPTIONS")
-	router.HandleFunc("/favorites", middleware.AuthMiddleware(favoritesController.GetFavorites)).Methods("GET", "OPTIONS")
+	// Favorites routes
+	favoritesSubrouter := router.PathPrefix("/favorites").Subrouter()
+	favoritesSubrouter.HandleFunc("", middleware.AuthMiddleware(favoritesController.GetFavorites)).Methods("GET", "OPTIONS")
+	favoritesSubrouter.HandleFunc("/add", middleware.AuthMiddleware(favoritesController.AddFavorite)).Methods("POST", "OPTIONS")
+	favoritesSubrouter.HandleFunc("/remove", middleware.AuthMiddleware(favoritesController.RemoveFavorite)).Methods("POST", "OPTIONS")
 
+	// Health check route
 	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
 
+	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8000"

@@ -3,33 +3,83 @@ import Layout from '../layouts/Layout.astro';
 import Card from "../components/Card.astro";
 import axios from "axios"; 
 
-const apiUrl = import.meta.env.API_URL;
+const apiUrl = import.meta.env.VITE_API_URL;
 
 const response = await axios.get(`${apiUrl}/auctions`, {
     headers: {
         "Content-Type": "application/json"
     }
-})
+});
 
-const auctions = response.data.auctions
+const auctions = response.data.auctions;
 ---
 
 <Layout title="Auctions">
     <div class="container">
-        <div class="card-grid">
-            {auctions.map((auction: any)=>{
-                return (
-                    <Card repoData={{details: "test"}} link={auction.link} date={auction.date} address={auction.address} city={auction.city} state={auction.state} status={auction.state} deposit={auction.deposit} logo={auction.logo}/>
-                )
-            })}
+        <div class="card-grid" id="auctions-grid">
+            {auctions.map((auction: any) => (
+                <Card 
+                    id={auction.id}
+                    link={auction.link}
+                    date={auction.date}
+                    address={auction.address}
+                    city={auction.city}
+                    state={auction.state}
+                    status={auction.status}
+                    deposit={auction.deposit}
+                    logo={auction.logo}
+                />
+            ))}
         </div>
     </div>
 </Layout>
 
+<script define:vars={{ apiUrl }}>
+// Check favorite status for all auctions when page loads
+async function checkFavoriteStatus() {
+    if (!localStorage.getItem('jwt_token')) return;
+
+    try {
+        const response = await fetch(`${apiUrl}/favorites`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`
+            },
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const favoriteIds = new Set(data.auctions.map(auction => auction.id));
+            
+            // Update heart icons for favorited auctions
+            document.querySelectorAll('.favorite-btn').forEach(button => {
+                const auctionId = parseInt(button.dataset.auctionId, 10);
+                const icon = button.querySelector('i');
+                if (favoriteIds.has(auctionId)) {
+                    icon.classList.remove('far');
+                    icon.classList.add('fas');
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error checking favorites:', error);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', checkFavoriteStatus);
+</script>
+
 <style>
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
 .card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 1.5rem;
+    padding: 2rem 0;
 }
 </style>

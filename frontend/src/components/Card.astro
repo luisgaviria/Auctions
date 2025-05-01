@@ -1,81 +1,109 @@
 ---
-const { link, date, address, city, state, status, deposit, logo, id } = Astro.props;
-const apiUrl = import.meta.env.API_URL;
+interface Props {
+    id: number;
+    link: string;
+    date: string;
+    address: string;
+    city: string;
+    state: string;
+    status: string;
+    deposit: string;
+    logo: string;
+}
+
+const { id, link, date, address, city, state, status, deposit, logo } = Astro.props;
+const apiUrl = import.meta.env.VITE_API_URL;
 ---
 
 <div class="card">
-  <script type="application/ld+json" set:html={JSON.stringify({
-    "@context": "http://schema.org",
-    "@type": "Event",
-    "name": "Auction",
-    "startDate": date,
-    "location": {
-        "@type": "Place",
-        "address": {
-            "@type": "PostalAddress",
-            "streetAddress": address,
-            "addressLocality": city,
-            "addressRegion": state
-        }
-    },
-    "url": link || "No link available",
-})}>
-</script>
     <div class="card-header">
-        <a href={link} target="blank" class="card-logo">
-            <img src={logo} class="thumb" alt="image of auctioneer website logo" />
+        <a href={link} target="_blank" rel="noopener noreferrer" class="card-logo">
+            <img src={logo} class="thumb" alt="auction website logo" />
         </a>
-        <button class="favorite-btn" data-auction-id={id}>
+        <button class="favorite-btn" data-auction-id={id} data-loading="false">
             <i class="far fa-heart"></i>
+            <div class="loading-spinner"></div>
         </button>
     </div>
-    <div class="status">{status ? status : "On Schedule"}</div>
-    <div class="date">Date: {date ? date : "no date displayed"}</div>
-    <div class="address">Address: {address ? address : "no address displayed"}</div>
+    <div class="status">{status || "On Schedule"}</div>
+    <div class="date">Date: {date || "no date displayed"}</div>
+    <div class="address">Address: {address || "no address displayed"}</div>
     {city && <div class="address">City: {city}</div>}
     {state && <div class="address">State: {state}</div>}
-    <div class="deposit">Deposit: {deposit ? deposit : "not available"}</div>
+    <div class="deposit">Deposit: {deposit || "not available"}</div>
 </div>
 
 <script define:vars={{ apiUrl }}>
-  document.addEventListener('DOMContentLoaded', () => {
-      const favoriteButtons = document.querySelectorAll('.favorite-btn');
-      
-      favoriteButtons.forEach(button => {
-          button.addEventListener('click', async (e) => {
-              e.preventDefault();
-              
-              if (!localStorage.getItem('jwt_token')) {
-                  window.location.href = '/login';
-                  return;
-              }
-  
-              const auctionId = button.dataset.auctionId;
-              const icon = button.querySelector('i');
-              const isFavorited = icon.classList.contains('fas');
-  
-              try {
-                  const response = await fetch(`${apiUrl}/favorites/${isFavorited ? 'remove' : 'add'}`, {
-                      method: 'POST',
-                      headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`
-                      },
-                      body: JSON.stringify({ auction_id: auctionId }),
-                      credentials: 'include'
-                  });
-  
-                  if (response.ok) {
-                      icon.classList.toggle('far');
-                      icon.classList.toggle('fas');
-                  }
-              } catch (error) {
-                  console.error('Error updating favorite:', error);
-              }
-          });
-      });
-  });
-  </script>
+document.addEventListener('DOMContentLoaded', () => {
+    const favoriteButtons = document.querySelectorAll('.favorite-btn');
+    
+    favoriteButtons.forEach(button => {
+        button.addEventListener('click', async (e) => {
+            e.preventDefault();
+            
+            if (!localStorage.getItem('jwt_token')) {
+                window.location.href = '/login';
+                return;
+            }
+
+            if (button.dataset.loading === 'true') return;
+
+            const auctionId = parseInt(button.dataset.auctionId, 10);
+            if (isNaN(auctionId)) {
+                console.error('Invalid auction ID');
+                return;
+            }
+
+            const icon = button.querySelector('i');
+            const isFavorited = icon.classList.contains('fas');
+
+            try {
+                button.dataset.loading = 'true';
+                const response = await fetch(`${apiUrl}/favorites/${isFavorited ? 'remove' : 'add'}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`
+                    },
+                    body: JSON.stringify({ auction_id: auctionId }),
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    icon.classList.toggle('far');
+                    icon.classList.toggle('fas');
+                } else {
+                    const data = await response.json();
+                    console.error('Error:', data.message);
+                    showToast('Error updating favorites');
+                }
+            } catch (error) {
+                console.error('Error updating favorite:', error);
+                showToast('Network error occurred');
+            } finally {
+                button.dataset.loading = 'false';
+            }
+        });
+    });
+});
+
+function showToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.add('show');
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 300);
+        }, 3000);
+    }, 100);
+}
+</script>
 
 <style>
   .card {
@@ -141,13 +169,54 @@ const apiUrl = import.meta.env.API_URL;
     font-size: 1.5rem;
     color: #ff4b4b;
     transition: transform 0.2s ease;
+    position: relative;
+    padding: 0.5rem;
 }
 
-.favorite-btn:hover {
-    transform: scale(1.1);
+.favorite-btn[data-loading="true"] i {
+    opacity: 0;
 }
 
-.fas.fa-heart {
-    color: #ff4b4b;
+.favorite-btn[data-loading="true"] .loading-spinner {
+    display: block;
+}
+
+.loading-spinner {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    border: 2px solid #ff4b4b;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
+}
+
+.toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100%);
+    background-color: #333;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+.toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
 }
   </style>

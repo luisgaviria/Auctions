@@ -1,8 +1,8 @@
 ---
 import { Navbar, Nav } from "react-bootstrap";
-const apiUrl = import.meta.env.API_URL;
-
+const apiUrl = import.meta.env.VITE_API_URL;
 ---
+
 <Navbar className="navbar" collapseOnSelect expand="md" bg="light" variant="light" fixed="top">
     <Navbar.Brand className="logo-nav-bar">
         <a href="/">
@@ -13,29 +13,42 @@ const apiUrl = import.meta.env.API_URL;
     <Navbar.Collapse id="responsive-navbar-nav">
         <Nav className="ml-auto nav-home">
             <Nav.Link href="/" key="1" className="navbar-brand-text">Home</Nav.Link>
-            <Nav.Link href="/favorites" key="2" className="navbar-brand-text">Favorites</Nav.Link>
+            <div id="favoritesLink">
+                <Nav.Link href="/favorites" key="2" className="navbar-brand-text">
+                    <i class="far fa-heart"></i> Favorites
+                </Nav.Link>
+            </div>
             <Nav.Link href="/about" key="3" className="navbar-brand-text">About Us</Nav.Link>
             <div class="auth-links" id="authLinks">
-                <Nav.Link href="/login" key="4" className="navbar-brand-text login-link">Login</Nav.Link>
-                <Nav.Link href="/register" key="5" className="navbar-brand-text register-link">Register</Nav.Link>
-              </div>
+                <!-- Auth links will be updated dynamically -->
+            </div>
         </Nav>
     </Navbar.Collapse>
 </Navbar>
+
 <script define:vars={{ apiUrl }}>
 const token = localStorage.getItem('jwt_token');
 const authLinks = document.getElementById('authLinks');
+const favoritesLink = document.getElementById('favoritesLink');
 
-// Update auth links based on token
+// Update auth links and favorites visibility based on token
 if (token) {
     authLinks.innerHTML = `
-        <a class="nav-link navbar-brand-text logout-link" href="#" onclick="handleLogout()">Logout</a>
+        <Nav.Link href="#" class="navbar-brand-text logout-link" onclick="handleLogout()">
+            <i class="fas fa-sign-out-alt"></i> Logout
+        </Nav.Link>
     `;
+    favoritesLink.style.display = 'block';
 } else {
     authLinks.innerHTML = `
-        <a class="nav-link navbar-brand-text login-link" href="/login">Login</a>
-        <a class="nav-link navbar-brand-text register-link" href="/register">Register</a>
+        <Nav.Link href="/login" class="navbar-brand-text login-link">
+            <i class="fas fa-sign-in-alt"></i> Login
+        </Nav.Link>
+        <Nav.Link href="/register" class="navbar-brand-text register-link">
+            <i class="fas fa-user-plus"></i> Register
+        </Nav.Link>
     `;
+    favoritesLink.style.display = 'none';
 }
 
 async function handleLogout() {
@@ -60,10 +73,9 @@ async function handleLogout() {
     }
 }
 
-// Make handleLogout available globally
 window.handleLogout = handleLogout;
 </script>
-  
+
 <style>
 .navbar {
   width: 100%;
@@ -114,5 +126,17 @@ window.handleLogout = handleLogout;
 
 .login-link:hover, .register-link:hover, .logout-link:hover {
     background-color: #f8f9fa;
+}
+
+.navbar-brand-text i {
+    margin-right: 0.5rem;
+}
+
+#favoritesLink {
+    transition: opacity 0.3s ease;
+}
+
+.navbar-brand-text:hover i {
+    transform: scale(1.1);
 }
 </style>
