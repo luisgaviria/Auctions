@@ -1,124 +1,241 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import axios from "axios";
-
 const apiUrl = import.meta.env.VITE_API_URL;
 ---
 
 <Layout title="Login">
-    <div class="login-container">
-        <h1 class="login-title">Login</h1>
-        <form class="login-form" id="loginForm">
-            <div class="form-group">
-                <label for="email">Email</label>
-                <input type="email" id="email" name="email" placeholder="Enter your email" required />
+    <div class="auth-page">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h1>Welcome Back</h1>
+                <p class="text-secondary">Sign in to access your favorite auctions</p>
             </div>
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" placeholder="Enter your password" required />
-            </div>
-            <button type="submit" class="login-button">Login</button>
-            <p>Don't have an account? <a href="/register">Register here</a></p>
-        </form>
+
+            <form class="auth-form" id="loginForm">
+                <div class="form-group">
+                    <label class="form-label" for="email">
+                        <i class="fas fa-envelope"></i>
+                        Email Address
+                    </label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        class="form-control" 
+                        placeholder="Enter your email"
+                        required
+                        autocomplete="email"
+                    />
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="password">
+                        <i class="fas fa-lock"></i>
+                        Password
+                    </label>
+                    <div class="password-input">
+                        <input 
+                            type="password" 
+                            id="password" 
+                            class="form-control" 
+                            placeholder="Enter your password"
+                            required
+                            autocomplete="current-password"
+                        />
+                        <button type="button" class="toggle-password" aria-label="Toggle password visibility">
+                            <i class="far fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-full">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Sign In
+                </button>
+
+                <p class="auth-alt-action">
+                    Don't have an account? 
+                    <a href="/register" class="text-primary">Create one now</a>
+                </p>
+            </form>
+        </div>
     </div>
 </Layout>
 
 <script define:vars={{ apiUrl }}>
-document.getElementById('loginForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
+document.addEventListener('DOMContentLoaded', () => {
+    // Password visibility toggle
+    const togglePassword = document.querySelector('.toggle-password');
+    const passwordInput = document.querySelector('#password');
 
-    try {
-        const response = await fetch(`${apiUrl}/auth/login`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ email, password }),
-            credentials: 'include'
-        });
+    togglePassword.addEventListener('click', () => {
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        togglePassword.querySelector('i').className = 
+            type === 'password' ? 'far fa-eye' : 'far fa-eye-slash';
+    });
 
-        const data = await response.json();
+    // Form submission
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const submitButton = e.target.querySelector('button[type="submit"]');
+        const originalContent = submitButton.innerHTML;
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing in...';
+        
+        try {
+            const response = await fetch(`${apiUrl}/auth/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: document.getElementById('email').value,
+                    password: document.getElementById('password').value
+                }),
+                credentials: 'include'
+            });
 
-        if (response.ok) {
-            // Store the token
-            localStorage.setItem('jwt_token', data.jwt_token);
-            // Redirect to home page
-            window.location.href = '/';
-        } else {
-            alert(data.message || 'Login failed');
+            const data = await response.json();
+
+            if (response.ok) {
+                localStorage.setItem('jwt_token', data.jwt_token);
+                showToast('Successfully logged in', 'success');
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 1000);
+            } else {
+                showToast(data.message || 'Login failed', 'error');
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalContent;
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            showToast('Network error occurred', 'error');
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalContent;
         }
-    } catch (error) {
-        console.error('Login error:', error);
-        alert('Login failed. Please try again.');
-    }
+    });
 });
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    const icon = document.createElement('i');
+    icon.className = `fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}`;
+    
+    toast.appendChild(icon);
+    toast.appendChild(document.createTextNode(message));
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.add('show');
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 300);
+        }, 3000);
+    }, 100);
+}
 </script>
 
 <style>
-.login-container {
-    max-width: 400px;
-    margin: 5rem auto;
-    padding: 2rem;
-    background: #ffffff;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    text-align: center;
+.auth-page {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: var(--spacing-md);
+    background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
 }
 
-.login-title {
-    font-size: 2rem;
-    margin-bottom: 1.5rem;
-    color: #333;
-}
-
-.login-form {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-}
-
-.form-group {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-}
-
-label {
-    font-size: 1rem;
-    margin-bottom: 0.5rem;
-    color: #555;
-}
-
-input {
+.auth-card {
     width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    font-size: 1rem;
-    color: #333;
+    max-width: 420px;
+    background: var(--color-card);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    padding: var(--spacing-2xl);
 }
 
-input:focus {
-    outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+.auth-header {
+    text-align: center;
+    margin-bottom: var(--spacing-xl);
 }
 
-.login-button {
-    padding: 0.75rem;
-    background-color: #007bff;
-    color: #ffffff;
+.auth-header h1 {
+    font-size: 1.875rem;
+    color: var(--color-text-primary);
+    margin-bottom: var(--spacing-xs);
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+}
+
+.form-label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-xs);
+}
+
+.form-label i {
+    color: var(--color-primary);
+    font-size: 0.875rem;
+}
+
+.password-input {
+    position: relative;
+}
+
+.toggle-password {
+    position: absolute;
+    right: var(--spacing-sm);
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
     border: none;
-    border-radius: 5px;
-    font-size: 1rem;
+    color: var(--color-text-secondary);
     cursor: pointer;
-    transition: background-color 0.3s ease;
+    padding: var(--spacing-xs);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-all);
 }
 
-.login-button:hover {
-    background-color: #0056b3;
+.toggle-password:hover {
+    color: var(--color-primary);
+}
+
+.w-full {
+    width: 100%;
+}
+
+.auth-alt-action {
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+}
+
+.auth-alt-action a {
+    font-weight: 600;
+}
+
+.auth-alt-action a:hover {
+    text-decoration: underline;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.fa-spin {
+    animation: spin 1s linear infinite;
 }
 </style>

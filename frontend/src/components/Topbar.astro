@@ -3,28 +3,34 @@ import { Navbar, Nav } from "react-bootstrap";
 const apiUrl = import.meta.env.VITE_API_URL;
 ---
 
-<Navbar className="navbar" collapseOnSelect expand="md" bg="light" variant="light" fixed="top">
-    <Navbar.Brand className="logo-nav-bar">
-        <a href="/">
-            <img alt="icon" class="d-inline-block" src="https://i.postimg.cc/KYyDL9CX/letters-icon-25.png" />
+<nav class="navbar">
+    <div class="navbar-container">
+        <a href="/" class="navbar-brand">
+            <img alt="icon" class="navbar-logo" src="https://i.postimg.cc/KYyDL9CX/letters-icon-25.png" />
+            <span class="brand-text">Auctions</span>
         </a>
-    </Navbar.Brand>
 
-    <Navbar.Collapse id="responsive-navbar-nav">
-        <Nav className="ml-auto nav-home">
-            <Nav.Link href="/" key="1" className="navbar-brand-text">Home</Nav.Link>
+        <div class="navbar-menu">
+            <a href="/" class="nav-link">
+                <i class="fas fa-home"></i>
+                <span>Home</span>
+            </a>
             <div id="favoritesLink">
-                <Nav.Link href="/favorites" key="2" className="navbar-brand-text">
-                    <i class="far fa-heart"></i> Favorites
-                </Nav.Link>
+                <a href="/favorites" class="nav-link">
+                    <i class="far fa-heart"></i>
+                    <span>Favorites</span>
+                </a>
             </div>
-            <Nav.Link href="/about" key="3" className="navbar-brand-text">About Us</Nav.Link>
+            <a href="/about" class="nav-link">
+                <i class="fas fa-info-circle"></i>
+                <span>About</span>
+            </a>
             <div class="auth-links" id="authLinks">
                 <!-- Auth links will be updated dynamically -->
             </div>
-        </Nav>
-    </Navbar.Collapse>
-</Navbar>
+        </div>
+    </div>
+</nav>
 
 <script define:vars={{ apiUrl }}>
 const token = localStorage.getItem('jwt_token');
@@ -34,19 +40,22 @@ const favoritesLink = document.getElementById('favoritesLink');
 // Update auth links and favorites visibility based on token
 if (token) {
     authLinks.innerHTML = `
-        <Nav.Link href="#" class="navbar-brand-text logout-link" onclick="handleLogout()">
-            <i class="fas fa-sign-out-alt"></i> Logout
-        </Nav.Link>
+        <div class="nav-link logout-link" onclick="handleLogout()">
+            <i class="fas fa-sign-out-alt"></i>
+            <span>Logout</span>
+        </div>
     `;
     favoritesLink.style.display = 'block';
 } else {
     authLinks.innerHTML = `
-        <Nav.Link href="/login" class="navbar-brand-text login-link">
-            <i class="fas fa-sign-in-alt"></i> Login
-        </Nav.Link>
-        <Nav.Link href="/register" class="navbar-brand-text register-link">
-            <i class="fas fa-user-plus"></i> Register
-        </Nav.Link>
+        <a href="/login" class="nav-link">
+            <i class="fas fa-sign-in-alt"></i>
+            <span>Login</span>
+        </a>
+        <a href="/register" class="nav-link nav-link-primary">
+            <i class="fas fa-user-plus"></i>
+            <span>Register</span>
+        </a>
     `;
     favoritesLink.style.display = 'none';
 }
@@ -75,68 +84,162 @@ async function handleLogout() {
 
 window.handleLogout = handleLogout;
 </script>
-
 <style>
-.navbar {
-  width: 100%;
-  background-color: #ffffff;
-  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-}
-
-.d-inline-block {
-  margin-left: 1rem;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  object-fit: cover;
-}
-
-.logo-nav-bar {
-  font-family: "Reenie Beanie", cursive;
-  font-size: 2em;
-  margin-left: 1rem;
-}
-
-.nav-home {
-  margin-left: auto;
-}
-
-.navbar-brand-text {
-  margin-right: 1.5rem;
-  font-size: 1.2rem;
-  font-weight: 400;
-  color: #555;
-  transition: color 0.3s ease;
-}
-
-.navbar-brand-text:hover {
-  color: #007bff;
-}
-.auth-links {
-    display: flex;
-    gap: 1rem;
-}
-
-.login-link, .register-link, .logout-link {
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    transition: all 0.3s ease;
-}
-
-.login-link:hover, .register-link:hover, .logout-link:hover {
-    background-color: #f8f9fa;
-}
-
-.navbar-brand-text i {
-    margin-right: 0.5rem;
-}
-
-#favoritesLink {
-    transition: opacity 0.3s ease;
-}
-
-.navbar-brand-text:hover i {
-    transform: scale(1.1);
-}
-</style>
+    .navbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background-color: var(--color-card);
+        box-shadow: var(--shadow-sm);
+        height: 4rem;
+        z-index: 50;
+    }
+    
+    .navbar-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 var(--spacing-md);
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    .navbar-brand {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        text-decoration: none; /* Ensure brand is not underlined */
+    }
+    
+    .navbar-logo {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: var(--radius-full);
+        object-fit: cover;
+    }
+    
+    .brand-text {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--color-primary);
+    }
+    
+    .navbar-menu {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-lg);
+    }
+    
+    .nav-link {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border-radius: var(--radius-md);
+        color: var(--color-text-secondary);
+        font-weight: 500;
+        transition: var(--transition-all);
+        cursor: pointer;
+        border: none; /* Base style for links/buttons */
+        background: none; /* Base style */
+        font-size: inherit; /* Inherit font size */
+        font-family: inherit; /* Inherit font family */
+        text-decoration: none; /* Remove underline from links */
+    }
+    
+    .nav-link i {
+        font-size: 1.125rem;
+        line-height: 1; /* Prevent icon from affecting line height */
+    }
+    
+    .nav-link:hover {
+        color: var(--color-primary);
+        background-color: rgba(59, 130, 246, 0.08); /* Light primary background on hover for standard links */
+    }
+    
+    .nav-link-primary {
+        background-color: var(--color-primary);
+        color: white;
+    }
+    
+    .nav-link-primary:hover {
+        background-color: var(--color-primary-dark);
+        color: white; /* Ensure text stays white */
+    }
+    
+    .auth-links {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+    
+    /* --- Updated Logout Button Styles --- */
+    .logout-link {
+        /* Inherits display, align-items, gap, padding, border-radius, cursor, font-size, font-family, transition from .nav-link */
+        color: var(--color-danger);         /* Use your danger color (e.g., red) for text */
+        border: 1px solid var(--color-danger); /* Use your danger color for the border */
+        background-color: transparent;       /* Make background transparent */
+        font-weight: 500;                  /* Match other nav link weight */
+    }
+    
+    .logout-link:hover {
+        color: white;                      /* White text on hover */
+        background-color: var(--color-danger); /* Fill with danger color on hover */
+        border-color: var(--color-danger);   /* Keep border color consistent */
+        /* If the general .nav-link:hover background interferes, you might need !important */
+        /* background-color: var(--color-danger) !important; */
+    }
+    /* --- End of Updated Styles --- */
+    
+    
+    /* Mobile menu */
+    @media (max-width: 768px) {
+        /* Add a button here to toggle the menu */
+        /* .menu-toggle { display: block; ... } */
+    
+        .navbar-menu {
+            position: fixed;
+            top: 4rem; /* Position below navbar */
+            left: 0;
+            right: 0;
+            background-color: var(--color-card);
+            padding: var(--spacing-md);
+            flex-direction: column;
+            align-items: stretch; /* Make items fill width */
+            gap: var(--spacing-md);
+            box-shadow: var(--shadow-lg);
+            display: none; /* Hide by default */
+            border-top: 1px solid var(--color-border); /* Optional separator */
+        }
+    
+        /* Add a class (e.g., 'active') via JS to show the menu */
+        .navbar-menu.active {
+            display: flex;
+        }
+    
+        .auth-links {
+            flex-direction: column;
+            width: 100%;
+            gap: var(--spacing-md); /* Adjust gap for column layout */
+        }
+    
+        .nav-link {
+            width: 100%; /* Make links/buttons full width */
+            justify-content: center; /* Center content within link/button */
+            padding: var(--spacing-sm) var(--spacing-md); /* Adjust padding */
+            box-sizing: border-box; /* Include padding/border in width */
+        }
+    
+        /* Ensure logout button looks good full-width */
+        .logout-link {
+           /* Styles generally work well, no specific overrides needed unless desired */
+           text-align: center; /* Ensure text is centered */
+        }
+    
+        #favoritesLink {
+            width: 100%; /* Ensure container takes full width */
+        }
+    }
+    </style>

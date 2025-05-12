@@ -15,23 +15,53 @@ const { id, link, date, address, city, state, status, deposit, logo } = Astro.pr
 const apiUrl = import.meta.env.VITE_API_URL;
 ---
 
-<div class="card">
-    <div class="card-header">
-        <a href={link} target="_blank" rel="noopener noreferrer" class="card-logo">
-            <img src={logo} class="thumb" alt="auction website logo" />
-        </a>
-        <button class="favorite-btn" data-auction-id={id} data-loading="false">
-            <i class="far fa-heart"></i>
-            <div class="loading-spinner"></div>
-        </button>
+<article class="card auction-card">
+    <div class="card-image">
+        <img src={logo} alt="auction company logo" class="auction-logo" />
+        <div class="card-badges">
+            <span class="badge status-badge">
+                <i class="fas fa-clock"></i>
+                {status || "On Schedule"}
+            </span>
+            <button class="favorite-btn" data-auction-id={id} data-loading="false" title="Add to favorites">
+                <i class="far fa-heart"></i>
+                <div class="loading-spinner"></div>
+            </button>
+        </div>
     </div>
-    <div class="status">{status || "On Schedule"}</div>
-    <div class="date">Date: {date || "no date displayed"}</div>
-    <div class="address">Address: {address || "no address displayed"}</div>
-    {city && <div class="address">City: {city}</div>}
-    {state && <div class="address">State: {state}</div>}
-    <div class="deposit">Deposit: {deposit || "not available"}</div>
-</div>
+    
+    <div class="card-content">
+        <div class="card-header">
+            <div class="card-date">
+                <i class="far fa-calendar-alt"></i>
+                <time datetime={date}>{date || "Date TBD"}</time>
+            </div>
+            <a href={link} target="_blank" rel="noopener noreferrer" class="external-link" title="View auction details">
+                <i class="fas fa-external-link-alt"></i>
+            </a>
+        </div>
+
+        <div class="location-info">
+            <div class="address">
+                <i class="fas fa-map-marker-alt"></i>
+                <span>{address || "Address not available"}</span>
+            </div>
+            {city && state && (
+                <div class="city-state">
+                    <i class="fas fa-city"></i>
+                    <span>{city}, {state}</span>
+                </div>
+            )}
+        </div>
+
+        {deposit && (
+            <div class="deposit-info">
+                <i class="fas fa-money-bill-wave"></i>
+                <span>Deposit: {deposit}</span>
+            </div>
+        )}
+    </div>
+</article>
 
 <script define:vars={{ apiUrl }}>
 document.addEventListener('DOMContentLoaded', () => {
@@ -40,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
     favoriteButtons.forEach(button => {
         button.addEventListener('click', async (e) => {
             e.preventDefault();
+            e.stopPropagation();
             
             if (!localStorage.getItem('jwt_token')) {
                 window.location.href = '/login';
@@ -72,14 +103,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (response.ok) {
                     icon.classList.toggle('far');
                     icon.classList.toggle('fas');
+                    showToast(isFavorited ? 'Removed from favorites' : 'Added to favorites', isFavorited ? 'info' : 'success');
                 } else {
                     const data = await response.json();
                     console.error('Error:', data.message);
-                    showToast('Error updating favorites');
+                    showToast('Error updating favorites', 'error');
                 }
             } catch (error) {
                 console.error('Error updating favorite:', error);
-                showToast('Network error occurred');
+                showToast('Network error occurred', 'error');
             } finally {
                 button.dataset.loading = 'false';
             }
@@ -87,10 +119,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-function showToast(message) {
+function showToast(message, type = 'info') {
     const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.textContent = message;
+    toast.className = `toast ${type}`;
+    
+    const icon = document.createElement('i');
+    icon.className = `fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}`;
+    
+    toast.appendChild(icon);
+    toast.appendChild(document.createTextNode(message));
+    
     document.body.appendChild(toast);
     
     setTimeout(() => {
@@ -106,117 +144,172 @@ function showToast(message) {
 </script>
 
 <style>
-  .card {
-    margin-top: 20px;
-    margin-left: auto;
-    margin-right: auto;
-    width: 100%;
-    max-width: 380px;
-    background-color: #ffffff;
-    border-radius: 8px;
-    box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.1);
+.auction-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
     overflow: hidden;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-  
-  .card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0px 6px 20px rgba(0, 0, 0, 0.15);
-  }
-  
-  .card-logo {
-    display: block;
-    text-align: center;
-    padding: 1rem;
-  }
-  
-  .thumb {
-    width: 100%;
-    height: 200px; /* Set a fixed height for consistency */
-    object-fit: cover; /* Ensures the image scales properly without distortion */
-    border-bottom: 1px solid #f0f0f0;
-  }
-  
-  .status {
-    font-size: 1.2rem;
-    font-weight: bold;
-    color: #007bff;
-    margin: 1rem 0;
-    text-align: center;
-  }
-  
-  .date, .address, .deposit {
-    font-size: 1rem;
-    color: #555;
-    margin: 0.5rem 1rem;
-  }
-  
-  .deposit {
-    font-weight: bold;
-  }
+}
 
-.card-header {
+.card-image {
+    position: relative;
+    padding-top: 56.25%; /* 16:9 aspect ratio */
+    background-color: var(--color-bg);
+    overflow: hidden;
+}
+
+.auction-logo {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: var(--transition-all);
+}
+
+.auction-card:hover .auction-logo {
+    transform: scale(1.05);
+}
+
+.card-badges {
+    position: absolute;
+    top: var(--spacing-sm);
+    left: var(--spacing-sm);
+    right: var(--spacing-sm);
     display: flex;
     justify-content: space-between;
+    align-items: flex-start;
+    z-index: 1;
+}
+
+.badge {
+    display: inline-flex;
     align-items: center;
-    padding: 1rem;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-full);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.status-badge {
+    background-color: var(--color-primary);
+    color: white;
 }
 
 .favorite-btn {
-    background: none;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--radius-full);
+    background-color: white;
+    color: var(--color-danger);
     border: none;
     cursor: pointer;
-    font-size: 1.5rem;
-    color: #ff4b4b;
-    transition: transform 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.125rem;
+    transition: var(--transition-all);
     position: relative;
-    padding: 0.5rem;
+}
+
+.favorite-btn:hover {
+    transform: scale(1.1);
+    box-shadow: var(--shadow-md);
 }
 
 .favorite-btn[data-loading="true"] i {
     opacity: 0;
 }
 
-.favorite-btn[data-loading="true"] .loading-spinner {
-    display: block;
-}
-
 .loading-spinner {
     display: none;
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 20px;
-    height: 20px;
-    border: 2px solid #ff4b4b;
-    border-radius: 50%;
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid var(--color-danger);
+    border-radius: var(--radius-full);
     border-top-color: transparent;
     animation: spin 0.6s linear infinite;
 }
 
+.favorite-btn[data-loading="true"] .loading-spinner {
+    display: block;
+}
+
 @keyframes spin {
-    to {
-        transform: translate(-50%, -50%) rotate(360deg);
-    }
+    to { transform: rotate(360deg); }
 }
 
-.toast {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%) translateY(100%);
-    background-color: #333;
-    color: white;
-    padding: 12px 24px;
-    border-radius: 4px;
-    opacity: 0;
-    transition: all 0.3s ease;
-    z-index: 1000;
+.card-content {
+    padding: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    flex: 1;
 }
 
-.toast.show {
-    transform: translateX(-50%) translateY(0);
-    opacity: 1;
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
-  </style>
+
+.card-date {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+}
+
+.external-link {
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-full);
+    color: var(--color-text-secondary);
+    transition: var(--transition-all);
+}
+
+.external-link:hover {
+    background-color: var(--color-bg);
+    color: var(--color-primary);
+}
+
+.location-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.address, .city-state {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    color: var(--color-text-primary);
+}
+
+.address i, .city-state i {
+    color: var(--color-text-secondary);
+    width: 1rem;
+}
+
+.deposit-info {
+    margin-top: auto;
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.deposit-info i {
+    color: var(--color-success);
+}
+</style>

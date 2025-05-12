@@ -1,35 +1,74 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Card from "../components/Card.astro";
-import axios from "axios"; 
+import axios, { AxiosError } from "axios"; 
 
 const apiUrl = import.meta.env.VITE_API_URL;
+let auctions = [];
+let error: string | null = null;
 
-const response = await axios.get(`${apiUrl}/auctions`, {
-    headers: {
-        "Content-Type": "application/json"
+try {
+    const response = await axios.get(`${apiUrl}/auctions`, {
+        headers: {
+            "Content-Type": "application/json"
+        }
+    });
+    auctions = response.data.auctions;
+} catch (e) {
+    console.error('Error fetching auctions:', e);
+    if (e instanceof AxiosError) {
+        error = e.response?.data?.message || e.message;
+    } else if (e instanceof Error) {
+        error = e.message;
+    } else {
+        error = 'An unexpected error occurred';
     }
-});
-
-const auctions = response.data.auctions;
+}
 ---
 
 <Layout title="Auctions">
-    <div class="container">
-        <div class="card-grid" id="auctions-grid">
-            {auctions.map((auction: any) => (
-                <Card 
-                    id={auction.id}
-                    link={auction.link}
-                    date={auction.date}
-                    address={auction.address}
-                    city={auction.city}
-                    state={auction.state}
-                    status={auction.status}
-                    deposit={auction.deposit}
-                    logo={auction.logo}
-                />
-            ))}
+    <div class="auctions-page">
+        <div class="container">
+            <header class="page-header">
+                <h1>Available Auctions</h1>
+                <p class="text-secondary">Discover and track upcoming property auctions</p>
+            </header>
+
+            {error ? (
+                <div class="error-state">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <h2>Error loading auctions</h2>
+                    <p>{error}</p>
+                    <button onclick="window.location.reload()" class="btn btn-primary">
+                        <i class="fas fa-redo"></i>
+                        Try Again
+                    </button>
+                </div>
+            ) : (
+                <div class="card-grid" id="auctions-grid">
+                    {auctions.length === 0 ? (
+                        <div class="empty-state">
+                            <i class="fas fa-search"></i>
+                            <h2>No auctions available</h2>
+                            <p>There are currently no auctions listed. Please check back later.</p>
+                        </div>
+                    ) : (
+                        auctions.map((auction: any) => (
+                            <Card 
+                                id={auction.id}
+                                link={auction.link}
+                                date={auction.date}
+                                address={auction.address}
+                                city={auction.city}
+                                state={auction.state}
+                                status={auction.status}
+                                deposit={auction.deposit}
+                                logo={auction.logo}
+                            />
+                        ))
+                    )}
+                </div>
+            )}
         </div>
     </div>
 </Layout>
@@ -51,7 +90,6 @@ async function checkFavoriteStatus() {
             const data = await response.json();
             const favoriteIds = new Set(data.auctions.map(auction => auction.id));
             
-            // Update heart icons for favorited auctions
             document.querySelectorAll('.favorite-btn').forEach(button => {
                 const auctionId = parseInt(button.dataset.auctionId, 10);
                 const icon = button.querySelector('i');
@@ -70,16 +108,68 @@ document.addEventListener('DOMContentLoaded', checkFavoriteStatus);
 </script>
 
 <style>
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2rem;
+.auctions-page {
+    padding-top: var(--spacing-2xl);
+}
+
+.page-header {
+    text-align: center;
+    margin-bottom: var(--spacing-2xl);
+}
+
+.page-header h1 {
+    font-size: 2.25rem;
+    margin-bottom: var(--spacing-xs);
 }
 
 .card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
-    padding: 2rem 0;
+    gap: var(--spacing-lg);
+    padding: var(--spacing-lg) 0;
+    min-height: 400px;
+}
+
+.empty-state,
+.error-state {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: var(--spacing-2xl);
+    gap: var(--spacing-md);
+}
+
+.empty-state i,
+.error-state i {
+    font-size: 3rem;
+    color: var(--color-text-secondary);
+    margin-bottom: var(--spacing-md);
+}
+
+.empty-state h2,
+.error-state h2 {
+    font-size: 1.5rem;
+    color: var(--color-text-primary);
+    margin-bottom: var(--spacing-sm);
+}
+
+.empty-state p,
+.error-state p {
+    color: var(--color-text-secondary);
+    max-width: 400px;
+    margin-bottom: var(--spacing-lg);
+}
+
+@media (max-width: 768px) {
+    .page-header h1 {
+        font-size: 1.875rem;
+    }
+
+    .card-grid {
+        gap: var(--spacing-md);
+    }
 }
 </style>
