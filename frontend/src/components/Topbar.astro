@@ -10,7 +10,13 @@ const apiUrl = import.meta.env.VITE_API_URL;
             <span class="brand-text">Auctions</span>
         </a>
 
-        <div class="navbar-menu">
+        <button class="menu-toggle" aria-label="Toggle menu" id="menuToggle">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+
+        <div class="navbar-menu" id="navbarMenu">
             <a href="/" class="nav-link">
                 <i class="fas fa-home"></i>
                 <span>Home</span>
@@ -83,6 +89,39 @@ async function handleLogout() {
 }
 
 window.handleLogout = handleLogout;
+
+// Burger menu functionality
+const menuToggle = document.getElementById('menuToggle');
+const navbarMenu = document.getElementById('navbarMenu');
+
+menuToggle.addEventListener('click', () => {
+    menuToggle.classList.toggle('active');
+    navbarMenu.classList.toggle('active');
+});
+
+// Close menu when clicking outside
+document.addEventListener('click', (e) => {
+    if (!menuToggle.contains(e.target) && !navbarMenu.contains(e.target) && navbarMenu.classList.contains('active')) {
+        menuToggle.classList.remove('active');
+        navbarMenu.classList.remove('active');
+    }
+});
+
+// Close menu when clicking a link
+navbarMenu.querySelectorAll('a').forEach(link => {
+    link.addEventListener('click', () => {
+        menuToggle.classList.remove('active');
+        navbarMenu.classList.remove('active');
+    });
+});
+
+// Handle escape key to close menu
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && navbarMenu.classList.contains('active')) {
+        menuToggle.classList.remove('active');
+        navbarMenu.classList.remove('active');
+    }
+});
 </script>
 <style>
     .navbar {
@@ -194,10 +233,61 @@ window.handleLogout = handleLogout;
     /* --- End of Updated Styles --- */
     
     
+    /* Burger Menu Button */
+    .menu-toggle {
+        display: none; /* Hidden by default on desktop */
+        background: none;
+        border: none;
+        padding: var(--spacing-sm);
+        cursor: pointer;
+        position: relative;
+        width: 2rem;
+        height: 2rem;
+    }
+
+    .menu-toggle span {
+        display: block;
+        width: 100%;
+        height: 2px;
+        background-color: var(--color-text-primary);
+        position: absolute;
+        left: 0;
+        transition: all 0.3s ease;
+    }
+
+    .menu-toggle span:first-child {
+        top: 25%;
+    }
+
+    .menu-toggle span:nth-child(2) {
+        top: 50%;
+        transform: translateY(-50%);
+    }
+
+    .menu-toggle span:last-child {
+        bottom: 25%;
+    }
+
+    /* Animated X when menu is open */
+    .menu-toggle.active span:first-child {
+        top: 50%;
+        transform: translateY(-50%) rotate(45deg);
+    }
+
+    .menu-toggle.active span:nth-child(2) {
+        opacity: 0;
+    }
+
+    .menu-toggle.active span:last-child {
+        bottom: 50%;
+        transform: translateY(50%) rotate(-45deg);
+    }
+
     /* Mobile menu */
     @media (max-width: 768px) {
-        /* Add a button here to toggle the menu */
-        /* .menu-toggle { display: block; ... } */
+        .menu-toggle {
+            display: block; /* Show burger menu on mobile */
+        }
     
         .navbar-menu {
             position: fixed;
@@ -210,36 +300,45 @@ window.handleLogout = handleLogout;
             align-items: stretch; /* Make items fill width */
             gap: var(--spacing-md);
             box-shadow: var(--shadow-lg);
-            display: none; /* Hide by default */
-            border-top: 1px solid var(--color-border); /* Optional separator */
+            transform: translateY(-100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+            border-top: 1px solid var(--color-border);
+            z-index: 49;
         }
     
-        /* Add a class (e.g., 'active') via JS to show the menu */
+        /* Show menu when active */
         .navbar-menu.active {
-            display: flex;
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
         }
     
         .auth-links {
             flex-direction: column;
             width: 100%;
-            gap: var(--spacing-md); /* Adjust gap for column layout */
+            gap: var(--spacing-md);
         }
     
         .nav-link {
-            width: 100%; /* Make links/buttons full width */
-            justify-content: center; /* Center content within link/button */
-            padding: var(--spacing-sm) var(--spacing-md); /* Adjust padding */
-            box-sizing: border-box; /* Include padding/border in width */
+            width: 100%;
+            justify-content: center;
+            padding: var(--spacing-sm) var(--spacing-md);
+            box-sizing: border-box;
         }
     
-        /* Ensure logout button looks good full-width */
         .logout-link {
-           /* Styles generally work well, no specific overrides needed unless desired */
-           text-align: center; /* Ensure text is centered */
+           text-align: center;
         }
     
         #favoritesLink {
-            width: 100%; /* Ensure container takes full width */
+            width: 100%;
+        }
+
+        /* Remove backdrop */
+        .navbar-menu.active {
+            background-color: var(--color-card);
         }
     }
     </style>
