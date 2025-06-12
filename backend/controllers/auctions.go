@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"backendAuction/utils/cache"
 	"database/sql"
 	"encoding/json"
 	"log"
@@ -36,31 +37,75 @@ type AuctionModel struct {
 }
 
 func (c *AuctionsController) GetAuctions(w http.ResponseWriter, req *http.Request) {
+	// Try to get from cache first
+	if cached, found := cache.Cache.Get(cache.AuctionsKey); found {
+		if data, ok := cached.([]byte); ok {
+			w.WriteHeader(http.StatusOK)
+			w.Write(data)
+			return
+		}
+	}
+
+	// If not in cache, get from database
 	auctions := make([]AuctionModel, 0)
 	rows, err := c.DB.Query(selectFromAuctionsTable)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		log.Println(err)
+		log.Printf("Database error: %v\n", err)
 		return
 	}
 	defer rows.Close()
+
 	for rows.Next() {
 		auction := AuctionModel{}
-		if err := rows.Scan(&auction.Id, &auction.Address, &auction.City, &auction.State, &auction.Time, &auction.Logo, &auction.Status, &auction.Link, &auction.Date, &auction.Deposit, &auction.Lat, &auction.Lng, &auction.Createdat); err != nil {
-			panic(err)
+		if err := rows.Scan(
+			&auction.Id,
+			&auction.Address,
+			&auction.City,
+			&auction.State,
+			&auction.Time,
+			&auction.Logo,
+			&auction.Status,
+			&auction.Link,
+			&auction.Date,
+			&auction.Deposit,
+			&auction.Lat,
+			&auction.Lng,
+			&auction.Createdat,
+		); err != nil {
+			log.Printf("Error scanning auction: %v\n", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 		auctions = append(auctions, auction)
 	}
+
 	if err := rows.Err(); err != nil {
-		panic(err)
+		log.Printf("Error iterating rows: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
-	response := GetAuctionsResponse{Message: "Succesfully fetched auctions", Auctions: auctions}
+
+	response := GetAuctionsResponse{
+		Message:  "Successfully fetched auctions",
+		Auctions: auctions,
+	}
 
 	data, err := json.Marshal(response)
 	if err != nil {
-		panic(err)
+		log.Printf("Error marshaling response: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
+
+	// Store in cache for 5 minutes
+	cache.Cache.Set(cache.AuctionsKey, data, 5*time.Minute)
 
 	w.WriteHeader(http.StatusOK)
 	w.Write(data)
+}
+
+// Add a method to invalidate cache when auctions are updated
+func (c *AuctionsController) InvalidateCache() {
+	cache.Cache.Delete(cache.AuctionsKey)
 }

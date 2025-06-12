@@ -23,6 +23,7 @@ func main() {
 
 	router := mux.NewRouter().StrictSlash(true)
 
+	router.Use(middleware.CacheMiddleware)
 	// CORS middleware
 	router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +36,7 @@ func main() {
 			w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Cache-Control", "public, max-age=300")
 
 			if r.Method == "OPTIONS" {
 				w.WriteHeader(http.StatusOK)
@@ -53,6 +55,7 @@ func main() {
 
 	db := utils.InitDb(dbURL)
 	utils.InitTables(db)
+	// utils.ScrapAllSites(db)
 
 	// Initialize controllers
 	authController := controllers.AuthController{DB: db}
