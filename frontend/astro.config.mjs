@@ -4,6 +4,6 @@ import react from '@astrojs/react';
 export default defineConfig({
   integrations: [react()],
   vite: {
-    envPrefix: 'VITE_'
-  }
+    envPrefix: 'VITE_',
+  },
 });

@@ -3,153 +3,160 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="About Auctions">
-    <div class="about-page">
-        <div class="container">
-            <header class="page-header">
-                <h1>About Auctions</h1>
-                <p class="text-secondary">Learn about our platform and how it works</p>
-            </header>
+  <div class="about-page">
+    <div class="container">
+      <header class="page-header">
+        <h1>About Auctions</h1>
+        <p class="text-secondary">Learn about our platform and how it works</p>
+      </header>
 
-            <div class="content-card">
-                <section class="about-section">
-                    <h2>
-                        <i class="fas fa-gavel"></i>
-                        What We Do
-                    </h2>
-                    <p>
-                        Auctions are a dynamic and exciting way to buy and sell properties. Our platform brings together buyers and sellers in a competitive environment, ensuring fair market value through transparent bidding processes.
-                    </p>
-                </section>
+      <div class="content-card">
+        <section class="about-section">
+          <h2>
+            <i class="fas fa-gavel"></i>
+            What We Do
+          </h2>
+          <p>
+            Auctions are a dynamic and exciting way to buy and sell properties. Our platform brings
+            together buyers and sellers in a competitive environment, ensuring fair market value
+            through transparent bidding processes.
+          </p>
+        </section>
 
-                <section class="about-section">
-                    <h2>
-                        <i class="fas fa-users"></i>
-                        Who We Serve
-                    </h2>
-                    <p>
-                        Whether you're a seasoned real estate investor or new to property auctions, our platform provides the tools and information you need to participate with confidence. We cater to both buyers looking for opportunities and sellers seeking the best value for their properties.
-                    </p>
-                </section>
+        <section class="about-section">
+          <h2>
+            <i class="fas fa-users"></i>
+            Who We Serve
+          </h2>
+          <p>
+            Whether you're a seasoned real estate investor or new to property auctions, our platform
+            provides the tools and information you need to participate with confidence. We cater to
+            both buyers looking for opportunities and sellers seeking the best value for their
+            properties.
+          </p>
+        </section>
 
-                <section class="about-section">
-                    <h2>
-                        <i class="fas fa-lightbulb"></i>
-                        Our Features
-                    </h2>
-                    <ul class="features-list">
-                        <li>
-                            <i class="fas fa-search"></i>
-                            <div>
-                                <h3>Easy Search</h3>
-                                <p>Find relevant auctions quickly with our intuitive search system</p>
-                            </div>
-                        </li>
-                        <li>
-                            <i class="fas fa-heart"></i>
-                            <div>
-                                <h3>Favorites</h3>
-                                <p>Save and track auctions you're interested in</p>
-                            </div>
-                        </li>
-                        <li>
-                            <i class="fas fa-bell"></i>
-                            <div>
-                                <h3>Updates</h3>
-                                <p>Stay informed about auction status changes and important dates</p>
-                            </div>
-                        </li>
-                    </ul>
-                </section>
+        <section class="about-section">
+          <h2>
+            <i class="fas fa-lightbulb"></i>
+            Our Features
+          </h2>
+          <ul class="features-list">
+            <li>
+              <i class="fas fa-search"></i>
+              <div>
+                <h3>Easy Search</h3>
+                <p>Find relevant auctions quickly with our intuitive search system</p>
+              </div>
+            </li>
+            <li>
+              <i class="fas fa-heart"></i>
+              <div>
+                <h3>Favorites</h3>
+                <p>Save and track auctions you're interested in</p>
+              </div>
+            </li>
+            <li>
+              <i class="fas fa-bell"></i>
+              <div>
+                <h3>Updates</h3>
+                <p>Stay informed about auction status changes and important dates</p>
+              </div>
+            </li>
+          </ul>
+        </section>
 
-                <section class="about-section">
-                    <h2>
-                        <i class="fas fa-handshake"></i>
-                        Get Started
-                    </h2>
-                    <p>
-                        Ready to explore the world of property auctions? Create an account to start tracking auctions and participating in bids. Our platform makes it easy to find and manage your auction interests.
-                    </p>
-                    <div class="cta-buttons">
-                        <a href="/register" class="btn btn-primary">
-                            <i class="fas fa-user-plus"></i>
-                            Create Account
-                        </a>
-                        <a href="/" class="btn btn-secondary">
-                            <i class="fas fa-search"></i>
-                            Browse Auctions
-                        </a>
-                    </div>
-                </section>
-            </div>
-        </div>
+        <section class="about-section">
+          <h2>
+            <i class="fas fa-handshake"></i>
+            Get Started
+          </h2>
+          <p>
+            Ready to explore the world of property auctions? Create an account to start tracking
+            auctions and participating in bids. Our platform makes it easy to find and manage your
+            auction interests.
+          </p>
+          <div class="cta-buttons">
+            <a href="/register" class="btn btn-primary">
+              <i class="fas fa-user-plus"></i>
+              Create Account
+            </a>
+            <a href="/" class="btn btn-secondary">
+              <i class="fas fa-search"></i>
+              Browse Auctions
+            </a>
+          </div>
+        </section>
+      </div>
     </div>
+  </div>
 </Layout>
 
 <style>
-.about-page {
+  .about-page {
     padding-top: var(--spacing-2xl);
-}
+  }
 
-.page-header {
+  .page-header {
     text-align: center;
     margin-bottom: var(--spacing-2xl);
-}
+  }
 
-.page-header h1 {
+  .page-header h1 {
     font-size: 2.25rem;
     margin-bottom: var(--spacing-xs);
-}
+  }
 
-.content-card {
+  .content-card {
     background-color: var(--color-card);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
     padding: var(--spacing-2xl);
     max-width: 800px;
     margin: 0 auto;
-}
+  }
 
-.about-section {
+  .about-section {
     margin-bottom: var(--spacing-2xl);
-}
+  }
 
-.about-section:last-child {
+  .about-section:last-child {
     margin-bottom: 0;
-}
+  }
 
-.about-section h2 {
+  .about-section h2 {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
     color: var(--color-primary);
     font-size: 1.5rem;
     margin-bottom: var(--spacing-lg);
-}
+  }
 
-.about-section h2 i {
+  .about-section h2 i {
     font-size: 1.25rem;
-}
+  }
 
-.about-section p {
+  .about-section p {
     color: var(--color-text-secondary);
     line-height: 1.8;
     font-size: 1.125rem;
-}
+  }
 
-.features-list {
+  .features-list {
     list-style: none;
     padding: 0;
     display: grid;
     gap: var(--spacing-lg);
-}
+  }
 
-.features-list li {
+  .features-list li {
     display: flex;
     align-items: flex-start;
     gap: var(--spacing-md);
-}
+  }
 
-.features-list i {
+  .features-list i {
     color: var(--color-primary);
     font-size: 1.25rem;
     padding: var(--spacing-sm);
@@ -160,49 +167,49 @@ import Layout from '../layouts/Layout.astro';
     display: flex;
     align-items: center;
     justify-content: center;
-}
+  }
 
-.features-list h3 {
+  .features-list h3 {
     font-size: 1.25rem;
     margin-bottom: var(--spacing-xs);
     color: var(--color-text-primary);
-}
+  }
 
-.features-list p {
+  .features-list p {
     font-size: 1rem;
     margin: 0;
-}
+  }
 
-.cta-buttons {
+  .cta-buttons {
     display: flex;
     gap: var(--spacing-md);
     margin-top: var(--spacing-xl);
-}
+  }
 
-@media (max-width: 768px) {
+  @media (max-width: 768px) {
     .content-card {
-        padding: var(--spacing-lg);
+      padding: var(--spacing-lg);
     }
 
     .page-header h1 {
-        font-size: 1.875rem;
+      font-size: 1.875rem;
     }
 
     .about-section h2 {
-        font-size: 1.25rem;
+      font-size: 1.25rem;
     }
 
     .features-list {
-        gap: var(--spacing-xl);
+      gap: var(--spacing-xl);
     }
 
     .cta-buttons {
-        flex-direction: column;
+      flex-direction: column;
     }
 
     .btn {
-        width: 100%;
-        justify-content: center;
+      width: 100%;
+      justify-content: center;
     }
-}
+  }
 </style>

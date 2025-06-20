@@ -1,6 +1,6 @@
 ---
-import Layout from "../layouts/Layout.astro";
-import Card from "../components/Card.astro";
+import Layout from '../layouts/Layout.astro';
+import Card from '../components/Card.astro';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 ---
@@ -10,9 +10,7 @@ const apiUrl = import.meta.env.VITE_API_URL;
     <div class="container">
       <header class="page-header">
         <h1>My Favorite Auctions</h1>
-        <p class="text-secondary">
-          Keep track of auctions you're interested in
-        </p>
+        <p class="text-secondary">Keep track of auctions you're interested in</p>
       </header>
 
       <div class="card-grid" id="favorites-container">
@@ -20,8 +18,8 @@ const apiUrl = import.meta.env.VITE_API_URL;
           <i class="far fa-heart"></i>
           <h2>No favorites yet</h2>
           <p>
-            When you find auctions you're interested in, mark them as favorites
-            to keep track of them here.
+            When you find auctions you're interested in, mark them as favorites to keep track of
+            them here.
           </p>
           <a href="/" class="btn btn-primary">
             <i class="fas fa-search"></i>
@@ -35,12 +33,12 @@ const apiUrl = import.meta.env.VITE_API_URL;
 
 <script define:vars={{ apiUrl }}>
   async function loadFavorites() {
-    if (!localStorage.getItem("jwt_token")) {
-      window.location.href = "/login";
+    if (!localStorage.getItem('jwt_token')) {
+      window.location.href = '/login';
       return;
     }
 
-    const container = document.getElementById("favorites-container");
+    const container = document.getElementById('favorites-container');
 
     try {
       container.innerHTML = `
@@ -52,13 +50,13 @@ const apiUrl = import.meta.env.VITE_API_URL;
 
       const response = await fetch(`${apiUrl}/favorites`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("jwt_token")}`,
+          Authorization: `Bearer ${localStorage.getItem('jwt_token')}`,
         },
-        credentials: "include",
+        credentials: 'include',
       });
 
       if (!response.ok) {
-        throw new Error("Failed to load favorites");
+        throw new Error('Failed to load favorites');
       }
 
       const data = await response.json();
@@ -88,7 +86,7 @@ const apiUrl = import.meta.env.VITE_API_URL;
                     <div class="card-badges">
                         <span class="badge status-badge">
                             <i class="fas fa-clock"></i>
-                            ${auction.status || "On Schedule"}
+                            ${auction.status || 'On Schedule'}
                         </span>
                         <button class="favorite-btn" data-auction-id="${auction.id}" data-loading="false" title="Remove from favorites">
                             <i class="fas fa-heart"></i>
@@ -101,7 +99,7 @@ const apiUrl = import.meta.env.VITE_API_URL;
                     <div class="card-header">
                         <div class="card-date">
                             <i class="far fa-calendar-alt"></i>
-                            <time datetime="${auction.date}">${auction.date || "Date TBD"}</time>
+                            <time datetime="${auction.date}">${auction.date || 'Date TBD'}</time>
                         </div>
                         <a href="${auction.link}" target="_blank" rel="noopener noreferrer" class="external-link" title="View auction details">
                             <i class="fas fa-external-link-alt"></i>
@@ -111,7 +109,7 @@ const apiUrl = import.meta.env.VITE_API_URL;
                     <div class="location-info">
                         <div class="address">
                             <i class="fas fa-map-marker-alt"></i>
-                            <span>${auction.address || "Address not available"}</span>
+                            <span>${auction.address || 'Address not available'}</span>
                         </div>
                         ${
                           auction.city && auction.state
@@ -121,7 +119,7 @@ const apiUrl = import.meta.env.VITE_API_URL;
                                 <span>${auction.city}, ${auction.state}</span>
                             </div>
                         `
-                            : ""
+                            : ''
                         }
                     </div>
 
@@ -133,7 +131,7 @@ const apiUrl = import.meta.env.VITE_API_URL;
                             <span>Deposit: ${auction.deposit}</span>
                         </div>
                     `
-                        : ""
+                        : ''
                     }
                 </div>
             </article>
@@ -309,11 +307,11 @@ const apiUrl = import.meta.env.VITE_API_URL;
                 </style>
         `
         )
-        .join("");
+        .join('');
 
       container.innerHTML = cards;
     } catch (error) {
-      console.error("Error loading favorites:", error);
+      console.error('Error loading favorites:', error);
       container.innerHTML = `
             <div class="error-state">
                 <i class="fas fa-exclamation-circle"></i>
@@ -329,22 +327,22 @@ const apiUrl = import.meta.env.VITE_API_URL;
   }
 
   // Initialize on page load
-  document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener('DOMContentLoaded', () => {
     loadFavorites();
 
     // Listen for favorite removal events and check if we need to show empty state
-    document.addEventListener("click", async (e) => {
-      const button = e.target.closest(".favorite-btn");
+    document.addEventListener('click', async (e) => {
+      const button = e.target.closest('.favorite-btn');
       if (!button) return;
 
       // If it's a favorited item (has fas class)
-      const icon = button.querySelector("i");
-      if (icon && icon.classList.contains("fas")) {
+      const icon = button.querySelector('i');
+      if (icon && icon.classList.contains('fas')) {
         // Wait for the removal animation
         await new Promise((resolve) => setTimeout(resolve, 300));
 
         // Check if there are any favorite cards left
-        const remainingCards = document.querySelectorAll(".auction-card");
+        const remainingCards = document.querySelectorAll('.auction-card');
         if (remainingCards.length === 0) {
           loadFavorites(); // This will show the empty state
         }
@@ -573,9 +571,7 @@ const apiUrl = import.meta.env.VITE_API_URL;
 
   @media (max-width: 768px) {
     .favorites-page {
-      padding-top: calc(
-        4rem + var(--spacing-lg, 1.5rem)
-      ); /* Adjust top padding */
+      padding-top: calc(4rem + var(--spacing-lg, 1.5rem)); /* Adjust top padding */
     }
 
     .page-header {

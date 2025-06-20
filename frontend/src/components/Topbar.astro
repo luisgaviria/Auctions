@@ -1,50 +1,50 @@
 ---
-import { Navbar, Nav } from "react-bootstrap";
+import { Navbar, Nav } from 'react-bootstrap';
 const apiUrl = import.meta.env.VITE_API_URL;
 ---
 
 <nav class="navbar">
-    <div class="navbar-container">
-        <a href="/" class="navbar-brand">
-            <img alt="icon" class="navbar-logo" src="https://i.postimg.cc/KYyDL9CX/letters-icon-25.png" />
-            <span class="brand-text">Auctions</span>
+  <div class="navbar-container">
+    <a href="/" class="navbar-brand">
+      <img alt="icon" class="navbar-logo" src="https://i.postimg.cc/KYyDL9CX/letters-icon-25.png" />
+      <span class="brand-text">Auctions</span>
+    </a>
+
+    <button class="menu-toggle" aria-label="Toggle menu" id="menuToggle" aria-expanded="false">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+    <div class="navbar-menu" id="navbarMenu">
+      <a href="/" class="nav-link">
+        <i class="fas fa-home"></i>
+        <span>Home</span>
+      </a>
+      <div id="favoritesLink">
+        <a href="/favorites" class="nav-link">
+          <i class="far fa-heart"></i>
+          <span>Favorites</span>
         </a>
-
-        <button class="menu-toggle" aria-label="Toggle menu" id="menuToggle">
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
-
-        <div class="navbar-menu" id="navbarMenu">
-            <a href="/" class="nav-link">
-                <i class="fas fa-home"></i>
-                <span>Home</span>
-            </a>
-            <div id="favoritesLink">
-                <a href="/favorites" class="nav-link">
-                    <i class="far fa-heart"></i>
-                    <span>Favorites</span>
-                </a>
-            </div>
-            <a href="/about" class="nav-link">
-                <i class="fas fa-info-circle"></i>
-                <span>About</span>
-            </a>
-            <div class="auth-links" id="authLinks">
-                <!-- Auth links will be updated dynamically -->
-            </div>
-        </div>
+      </div>
+      <a href="/about" class="nav-link">
+        <i class="fas fa-info-circle"></i>
+        <span>About</span>
+      </a>
+      <div class="auth-links" id="authLinks">
+        <!-- Auth links will be updated dynamically -->
+      </div>
     </div>
+  </div>
 </nav>
 
 <script define:vars={{ apiUrl }}>
-const token = localStorage.getItem('jwt_token');
-const authLinks = document.getElementById('authLinks');
-const favoritesLink = document.getElementById('favoritesLink');
+  const token = localStorage.getItem('jwt_token');
+  const authLinks = document.getElementById('authLinks');
+  const favoritesLink = document.getElementById('favoritesLink');
 
-// Update auth links and favorites visibility based on token
-if (token) {
+  // Update auth links and favorites visibility based on token
+  if (token) {
     authLinks.innerHTML = `
         <div class="nav-link logout-link" onclick="handleLogout()">
             <i class="fas fa-sign-out-alt"></i>
@@ -52,7 +52,7 @@ if (token) {
         </div>
     `;
     favoritesLink.style.display = 'block';
-} else {
+  } else {
     authLinks.innerHTML = `
         <a href="/login" class="nav-link">
             <i class="fas fa-sign-in-alt"></i>
@@ -64,281 +64,290 @@ if (token) {
         </a>
     `;
     favoritesLink.style.display = 'none';
-}
+  }
 
-async function handleLogout() {
+  async function handleLogout() {
     try {
-        const response = await fetch(`${apiUrl}/auth/logout`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`
-            },
-            credentials: 'include'
-        });
+      const response = await fetch(`${apiUrl}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('jwt_token')}`,
+        },
+        credentials: 'include',
+      });
 
-        if (response.ok) {
-            localStorage.removeItem('jwt_token');
-            window.location.href = '/login';
-        } else {
-            console.error('Logout failed');
-        }
+      if (response.ok) {
+        localStorage.removeItem('jwt_token');
+        window.location.href = '/login';
+      } else {
+        console.error('Logout failed');
+      }
     } catch (error) {
-        console.error('Logout error:', error);
+      console.error('Logout error:', error);
     }
-}
+  }
 
-window.handleLogout = handleLogout;
+  window.handleLogout = handleLogout;
 
-// Burger menu functionality
-const menuToggle = document.getElementById('menuToggle');
-const navbarMenu = document.getElementById('navbarMenu');
+  // Burger menu functionality
+  const menuToggle = document.getElementById('menuToggle');
+  const navbarMenu = document.getElementById('navbarMenu');
 
-menuToggle.addEventListener('click', () => {
+  menuToggle.addEventListener('click', () => {
     menuToggle.classList.toggle('active');
     navbarMenu.classList.toggle('active');
-});
+    menuToggle.setAttribute('aria-expanded', menuToggle.classList.contains('active').toString());
+  });
 
-// Close menu when clicking outside
-document.addEventListener('click', (e) => {
-    if (!menuToggle.contains(e.target) && !navbarMenu.contains(e.target) && navbarMenu.classList.contains('active')) {
-        menuToggle.classList.remove('active');
-        navbarMenu.classList.remove('active');
+  // Close menu when clicking outside
+  document.addEventListener('click', (e) => {
+    if (
+      !menuToggle.contains(e.target) &&
+      !navbarMenu.contains(e.target) &&
+      navbarMenu.classList.contains('active')
+    ) {
+      menuToggle.classList.remove('active');
+      navbarMenu.classList.remove('active');
     }
-});
+  });
 
-// Close menu when clicking a link
-navbarMenu.querySelectorAll('a').forEach(link => {
+  // Close menu when clicking a link
+  navbarMenu.querySelectorAll('a').forEach((link) => {
     link.addEventListener('click', () => {
-        menuToggle.classList.remove('active');
-        navbarMenu.classList.remove('active');
+      menuToggle.classList.remove('active');
+      navbarMenu.classList.remove('active');
     });
-});
+  });
 
-// Handle escape key to close menu
-document.addEventListener('keydown', (e) => {
+  // Handle escape key to close menu
+  document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && navbarMenu.classList.contains('active')) {
-        menuToggle.classList.remove('active');
-        navbarMenu.classList.remove('active');
+      menuToggle.classList.remove('active');
+      navbarMenu.classList.remove('active');
     }
-});
+  });
 </script>
 <style>
-    .navbar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        background-color: var(--color-card);
-        box-shadow: var(--shadow-sm);
-        height: 4rem;
-        z-index: 50;
-    }
-    
-    .navbar-container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 0 var(--spacing-md);
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    
-    .navbar-brand {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-sm);
-        text-decoration: none; /* Ensure brand is not underlined */
-    }
-    
-    .navbar-logo {
-        width: 2.5rem;
-        height: 2.5rem;
-        border-radius: var(--radius-full);
-        object-fit: cover;
-    }
-    
-    .brand-text {
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: var(--color-primary);
-    }
-    
-    .navbar-menu {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-lg);
-    }
-    
-    .nav-link {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-xs);
-        padding: var(--spacing-xs) var(--spacing-sm);
-        border-radius: var(--radius-md);
-        color: var(--color-text-secondary);
-        font-weight: 500;
-        transition: var(--transition-all);
-        cursor: pointer;
-        border: none; /* Base style for links/buttons */
-        background: none; /* Base style */
-        font-size: inherit; /* Inherit font size */
-        font-family: inherit; /* Inherit font family */
-        text-decoration: none; /* Remove underline from links */
-    }
-    
-    .nav-link i {
-        font-size: 1.125rem;
-        line-height: 1; /* Prevent icon from affecting line height */
-    }
-    
-    .nav-link:hover {
-        color: var(--color-primary);
-        background-color: rgba(59, 130, 246, 0.08); /* Light primary background on hover for standard links */
-    }
-    
-    .nav-link-primary {
-        background-color: var(--color-primary);
-        color: white;
-    }
-    
-    .nav-link-primary:hover {
-        background-color: var(--color-primary-dark);
-        color: white; /* Ensure text stays white */
-    }
-    
-    .auth-links {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-sm);
-    }
-    
-    /* --- Updated Logout Button Styles --- */
-    .logout-link {
-        /* Inherits display, align-items, gap, padding, border-radius, cursor, font-size, font-family, transition from .nav-link */
-        color: var(--color-danger);         /* Use your danger color (e.g., red) for text */
-        border: 1px solid var(--color-danger); /* Use your danger color for the border */
-        background-color: transparent;       /* Make background transparent */
-        font-weight: 500;                  /* Match other nav link weight */
-    }
-    
-    .logout-link:hover {
-        color: white;                      /* White text on hover */
-        background-color: var(--color-danger); /* Fill with danger color on hover */
-        border-color: var(--color-danger);   /* Keep border color consistent */
-        /* If the general .nav-link:hover background interferes, you might need !important */
-        /* background-color: var(--color-danger) !important; */
-    }
-    /* --- End of Updated Styles --- */
-    
-    
-    /* Burger Menu Button */
+  .navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background-color: var(--color-card);
+    box-shadow: var(--shadow-sm);
+    height: 4rem;
+    z-index: 50;
+  }
+
+  .navbar-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--spacing-md);
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    text-decoration: none; /* Ensure brand is not underlined */
+  }
+
+  .navbar-logo {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--radius-full);
+    object-fit: cover;
+  }
+
+  .brand-text {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+
+  .navbar-menu {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-lg);
+  }
+
+  .nav-link {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    transition: var(--transition-all);
+    cursor: pointer;
+    border: none; /* Base style for links/buttons */
+    background: none; /* Base style */
+    font-size: inherit; /* Inherit font size */
+    font-family: inherit; /* Inherit font family */
+    text-decoration: none; /* Remove underline from links */
+  }
+
+  .nav-link i {
+    font-size: 1.125rem;
+    line-height: 1; /* Prevent icon from affecting line height */
+  }
+
+  .nav-link:hover {
+    color: var(--color-primary);
+    background-color: rgba(
+      59,
+      130,
+      246,
+      0.08
+    ); /* Light primary background on hover for standard links */
+  }
+
+  .nav-link-primary {
+    background-color: var(--color-primary);
+    color: white;
+  }
+
+  .nav-link-primary:hover {
+    background-color: var(--color-primary-dark);
+    color: white; /* Ensure text stays white */
+  }
+
+  .auth-links {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+  }
+
+  /* --- Updated Logout Button Styles --- */
+  .logout-link {
+    /* Inherits display, align-items, gap, padding, border-radius, cursor, font-size, font-family, transition from .nav-link */
+    color: var(--color-danger); /* Use your danger color (e.g., red) for text */
+    border: 1px solid var(--color-danger); /* Use your danger color for the border */
+    background-color: transparent; /* Make background transparent */
+    font-weight: 500; /* Match other nav link weight */
+  }
+
+  .logout-link:hover {
+    color: white; /* White text on hover */
+    background-color: var(--color-danger); /* Fill with danger color on hover */
+    border-color: var(--color-danger); /* Keep border color consistent */
+    /* If the general .nav-link:hover background interferes, you might need !important */
+    /* background-color: var(--color-danger) !important; */
+  }
+  /* --- End of Updated Styles --- */
+
+  /* Burger Menu Button */
+  .menu-toggle {
+    display: none; /* Hidden by default on desktop */
+    background: none;
+    border: none;
+    padding: var(--spacing-sm);
+    cursor: pointer;
+    position: relative;
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .menu-toggle span {
+    display: block;
+    width: 100%;
+    height: 2px;
+    background-color: var(--color-text-primary);
+    position: absolute;
+    left: 0;
+    transition: all 0.3s ease;
+  }
+
+  .menu-toggle span:first-child {
+    top: 25%;
+  }
+
+  .menu-toggle span:nth-child(2) {
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .menu-toggle span:last-child {
+    bottom: 25%;
+  }
+
+  /* Animated X when menu is open */
+  .menu-toggle.active span:first-child {
+    top: 50%;
+    transform: translateY(-50%) rotate(45deg);
+  }
+
+  .menu-toggle.active span:nth-child(2) {
+    opacity: 0;
+  }
+
+  .menu-toggle.active span:last-child {
+    bottom: 50%;
+    transform: translateY(50%) rotate(-45deg);
+  }
+
+  /* Mobile menu */
+  @media (max-width: 768px) {
     .menu-toggle {
-        display: none; /* Hidden by default on desktop */
-        background: none;
-        border: none;
-        padding: var(--spacing-sm);
-        cursor: pointer;
-        position: relative;
-        width: 2rem;
-        height: 2rem;
+      display: block; /* Show burger menu on mobile */
     }
 
-    .menu-toggle span {
-        display: block;
-        width: 100%;
-        height: 2px;
-        background-color: var(--color-text-primary);
-        position: absolute;
-        left: 0;
-        transition: all 0.3s ease;
+    .navbar-menu {
+      position: fixed;
+      top: 4rem; /* Position below navbar */
+      left: 0;
+      right: 0;
+      background-color: var(--color-card);
+      padding: var(--spacing-md);
+      flex-direction: column;
+      align-items: stretch; /* Make items fill width */
+      gap: var(--spacing-md);
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-100%);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s ease;
+      border-top: 1px solid var(--color-border);
+      z-index: 49;
     }
 
-    .menu-toggle span:first-child {
-        top: 25%;
+    /* Show menu when active */
+    .navbar-menu.active {
+      transform: translateY(0);
+      opacity: 1;
+      pointer-events: auto;
     }
 
-    .menu-toggle span:nth-child(2) {
-        top: 50%;
-        transform: translateY(-50%);
+    .auth-links {
+      flex-direction: column;
+      width: 100%;
+      gap: var(--spacing-md);
     }
 
-    .menu-toggle span:last-child {
-        bottom: 25%;
+    .nav-link {
+      width: 100%;
+      justify-content: center;
+      padding: var(--spacing-sm) var(--spacing-md);
+      box-sizing: border-box;
     }
 
-    /* Animated X when menu is open */
-    .menu-toggle.active span:first-child {
-        top: 50%;
-        transform: translateY(-50%) rotate(45deg);
+    .logout-link {
+      text-align: center;
     }
 
-    .menu-toggle.active span:nth-child(2) {
-        opacity: 0;
+    #favoritesLink {
+      width: 100%;
     }
 
-    .menu-toggle.active span:last-child {
-        bottom: 50%;
-        transform: translateY(50%) rotate(-45deg);
+    /* Remove backdrop */
+    .navbar-menu.active {
+      background-color: var(--color-card);
     }
-
-    /* Mobile menu */
-    @media (max-width: 768px) {
-        .menu-toggle {
-            display: block; /* Show burger menu on mobile */
-        }
-    
-        .navbar-menu {
-            position: fixed;
-            top: 4rem; /* Position below navbar */
-            left: 0;
-            right: 0;
-            background-color: var(--color-card);
-            padding: var(--spacing-md);
-            flex-direction: column;
-            align-items: stretch; /* Make items fill width */
-            gap: var(--spacing-md);
-            box-shadow: var(--shadow-lg);
-            transform: translateY(-100%);
-            opacity: 0;
-            pointer-events: none;
-            transition: all 0.3s ease;
-            border-top: 1px solid var(--color-border);
-            z-index: 49;
-        }
-    
-        /* Show menu when active */
-        .navbar-menu.active {
-            transform: translateY(0);
-            opacity: 1;
-            pointer-events: auto;
-        }
-    
-        .auth-links {
-            flex-direction: column;
-            width: 100%;
-            gap: var(--spacing-md);
-        }
-    
-        .nav-link {
-            width: 100%;
-            justify-content: center;
-            padding: var(--spacing-sm) var(--spacing-md);
-            box-sizing: border-box;
-        }
-    
-        .logout-link {
-           text-align: center;
-        }
-    
-        #favoritesLink {
-            width: 100%;
-        }
-
-        /* Remove backdrop */
-        .navbar-menu.active {
-            background-color: var(--color-card);
-        }
-    }
-    </style>
+  }
+</style>

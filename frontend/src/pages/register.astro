@@ -4,70 +4,70 @@ const apiUrl = import.meta.env.VITE_API_URL;
 ---
 
 <Layout title="Register">
-    <div class="auth-page">
-        <div class="auth-card">
-            <div class="auth-header">
-                <h1>Create Account</h1>
-                <p class="text-secondary">Join us to track your favorite auctions</p>
-            </div>
+  <div class="auth-page">
+    <div class="auth-card">
+      <div class="auth-header">
+        <h1>Create Account</h1>
+        <p class="text-secondary">Join us to track your favorite auctions</p>
+      </div>
 
-            <form class="auth-form" id="registerForm">
-                <div class="form-group">
-                    <label class="form-label" for="email">
-                        <i class="fas fa-envelope"></i>
-                        Email Address
-                    </label>
-                    <input 
-                        type="email" 
-                        id="email" 
-                        class="form-control" 
-                        placeholder="Enter your email"
-                        required
-                        autocomplete="email"
-                    />
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" for="password">
-                        <i class="fas fa-lock"></i>
-                        Password
-                    </label>
-                    <div class="password-input">
-                        <input 
-                            type="password" 
-                            id="password" 
-                            class="form-control" 
-                            placeholder="Choose a strong password"
-                            required
-                            minlength="8"
-                            autocomplete="new-password"
-                        />
-                        <button type="button" class="toggle-password" aria-label="Toggle password visibility">
-                            <i class="far fa-eye"></i>
-                        </button>
-                    </div>
-                    <div class="password-strength" id="passwordStrength">
-                        <div class="strength-bar"></div>
-                        <span class="strength-text"></span>
-                    </div>
-                </div>
-
-                <button type="submit" class="btn btn-primary w-full">
-                    <i class="fas fa-user-plus"></i>
-                    Create Account
-                </button>
-
-                <p class="auth-alt-action">
-                    Already have an account? 
-                    <a href="/login" class="text-primary">Sign in instead</a>
-                </p>
-            </form>
+      <form class="auth-form" id="registerForm">
+        <div class="form-group">
+          <label class="form-label" for="email">
+            <i class="fas fa-envelope"></i>
+            Email Address
+          </label>
+          <input
+            type="email"
+            id="email"
+            class="form-control"
+            placeholder="Enter your email"
+            required
+            autocomplete="email"
+          />
         </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">
+            <i class="fas fa-lock"></i>
+            Password
+          </label>
+          <div class="password-input">
+            <input
+              type="password"
+              id="password"
+              class="form-control"
+              placeholder="Choose a strong password"
+              required
+              minlength="8"
+              autocomplete="new-password"
+            />
+            <button type="button" class="toggle-password" aria-label="Toggle password visibility">
+              <i class="far fa-eye"></i>
+            </button>
+          </div>
+          <div class="password-strength" id="passwordStrength">
+            <div class="strength-bar"></div>
+            <span class="strength-text"></span>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-full">
+          <i class="fas fa-user-plus"></i>
+          Create Account
+        </button>
+
+        <p class="auth-alt-action">
+          Already have an account?
+          <a href="/login" class="text-primary">Sign in instead</a>
+        </p>
+      </form>
     </div>
+  </div>
 </Layout>
 
 <script define:vars={{ apiUrl }}>
-document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', () => {
     // Password visibility toggle
     const togglePassword = document.querySelector('.toggle-password');
     const passwordInput = document.querySelector('#password');
@@ -75,169 +75,169 @@ document.addEventListener('DOMContentLoaded', () => {
     const strengthText = document.querySelector('.strength-text');
 
     togglePassword.addEventListener('click', () => {
-        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-        passwordInput.setAttribute('type', type);
-        togglePassword.querySelector('i').className = 
-            type === 'password' ? 'far fa-eye' : 'far fa-eye-slash';
+      const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+      passwordInput.setAttribute('type', type);
+      togglePassword.querySelector('i').className =
+        type === 'password' ? 'far fa-eye' : 'far fa-eye-slash';
     });
 
     // Password strength checker
     passwordInput.addEventListener('input', () => {
-        const password = passwordInput.value;
-        const strength = checkPasswordStrength(password);
-        updatePasswordStrength(strength);
+      const password = passwordInput.value;
+      const strength = checkPasswordStrength(password);
+      updatePasswordStrength(strength);
     });
 
     function checkPasswordStrength(password) {
-        let score = 0;
-        
-        if (password.length >= 8) score++;
-        if (password.match(/[a-z]/) && password.match(/[A-Z]/)) score++;
-        if (password.match(/\d/)) score++;
-        if (password.match(/[^a-zA-Z\d]/)) score++;
-        
-        return score;
+      let score = 0;
+
+      if (password.length >= 8) score++;
+      if (password.match(/[a-z]/) && password.match(/[A-Z]/)) score++;
+      if (password.match(/\d/)) score++;
+      if (password.match(/[^a-zA-Z\d]/)) score++;
+
+      return score;
     }
 
     function updatePasswordStrength(score) {
-        const strengths = ['weak', 'medium', 'strong', 'very-strong'];
-        const messages = ['Weak', 'Medium', 'Strong', 'Very Strong'];
-        const colors = ['#ef4444', '#f59e0b', '#22c55e', '#10b981'];
-        
-        if (passwordInput.value.length === 0) {
-            strengthBar.style.width = '0';
-            strengthBar.style.backgroundColor = '';
-            strengthText.textContent = '';
-            return;
-        }
+      const strengths = ['weak', 'medium', 'strong', 'very-strong'];
+      const messages = ['Weak', 'Medium', 'Strong', 'Very Strong'];
+      const colors = ['#ef4444', '#f59e0b', '#22c55e', '#10b981'];
 
-        const strengthIndex = Math.max(0, score - 1);
-        const width = ((strengthIndex + 1) / 4) * 100;
-        
-        strengthBar.style.width = `${width}%`;
-        strengthBar.style.backgroundColor = colors[strengthIndex];
-        strengthText.textContent = messages[strengthIndex];
-        strengthText.style.color = colors[strengthIndex];
+      if (passwordInput.value.length === 0) {
+        strengthBar.style.width = '0';
+        strengthBar.style.backgroundColor = '';
+        strengthText.textContent = '';
+        return;
+      }
+
+      const strengthIndex = Math.max(0, score - 1);
+      const width = ((strengthIndex + 1) / 4) * 100;
+
+      strengthBar.style.width = `${width}%`;
+      strengthBar.style.backgroundColor = colors[strengthIndex];
+      strengthText.textContent = messages[strengthIndex];
+      strengthText.style.color = colors[strengthIndex];
     }
 
     // Form submission
     document.getElementById('registerForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const submitButton = e.target.querySelector('button[type="submit"]');
-        const originalContent = submitButton.innerHTML;
-        submitButton.disabled = true;
-        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating account...';
-        
-        try {
-            const response = await fetch(`${apiUrl}/auth/signup`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    email: document.getElementById('email').value,
-                    password: document.getElementById('password').value
-                })
-            });
+      e.preventDefault();
 
-            const data = await response.json();
+      const submitButton = e.target.querySelector('button[type="submit"]');
+      const originalContent = submitButton.innerHTML;
+      submitButton.disabled = true;
+      submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating account...';
 
-            if (response.ok) {
-                showToast('Account created successfully', 'success');
-                setTimeout(() => {
-                    window.location.href = '/login';
-                }, 1000);
-            } else {
-                showToast(data.message || 'Registration failed', 'error');
-                submitButton.disabled = false;
-                submitButton.innerHTML = originalContent;
-            }
-        } catch (error) {
-            console.error('Registration error:', error);
-            showToast('Network error occurred', 'error');
-            submitButton.disabled = false;
-            submitButton.innerHTML = originalContent;
+      try {
+        const response = await fetch(`${apiUrl}/auth/signup`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: document.getElementById('email').value,
+            password: document.getElementById('password').value,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          showToast('Account created successfully', 'success');
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1000);
+        } else {
+          showToast(data.message || 'Registration failed', 'error');
+          submitButton.disabled = false;
+          submitButton.innerHTML = originalContent;
         }
+      } catch (error) {
+        console.error('Registration error:', error);
+        showToast('Network error occurred', 'error');
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalContent;
+      }
     });
-});
+  });
 
-function showToast(message, type = 'info') {
+  function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    
+
     const icon = document.createElement('i');
     icon.className = `fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}`;
-    
+
     toast.appendChild(icon);
     toast.appendChild(document.createTextNode(message));
-    
+
     document.body.appendChild(toast);
-    
+
     setTimeout(() => {
-        toast.classList.add('show');
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
         setTimeout(() => {
-            toast.classList.remove('show');
-            setTimeout(() => {
-                document.body.removeChild(toast);
-            }, 300);
-        }, 3000);
+          document.body.removeChild(toast);
+        }, 300);
+      }, 3000);
     }, 100);
-}
+  }
 </script>
 
 <style>
-.auth-page {
+  .auth-page {
     min-height: 100vh;
     display: grid;
     place-items: center;
     padding: var(--spacing-md);
     background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
-}
+  }
 
-.auth-card {
+  .auth-card {
     width: 100%;
     max-width: 420px;
     background: var(--color-card);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-xl);
     padding: var(--spacing-2xl);
-}
+  }
 
-.auth-header {
+  .auth-header {
     text-align: center;
     margin-bottom: var(--spacing-xl);
-}
+  }
 
-.auth-header h1 {
+  .auth-header h1 {
     font-size: 1.875rem;
     color: var(--color-text-primary);
     margin-bottom: var(--spacing-xs);
-}
+  }
 
-.auth-form {
+  .auth-form {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-lg);
-}
+  }
 
-.form-label {
+  .form-label {
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
     margin-bottom: var(--spacing-xs);
-}
+  }
 
-.form-label i {
+  .form-label i {
     color: var(--color-primary);
     font-size: 0.875rem;
-}
+  }
 
-.password-input {
+  .password-input {
     position: relative;
-}
+  }
 
-.toggle-password {
+  .toggle-password {
     position: absolute;
     right: var(--spacing-sm);
     top: 50%;
@@ -251,53 +251,55 @@ function showToast(message, type = 'info') {
     align-items: center;
     justify-content: center;
     transition: var(--transition-all);
-}
+  }
 
-.toggle-password:hover {
+  .toggle-password:hover {
     color: var(--color-primary);
-}
+  }
 
-.password-strength {
+  .password-strength {
     margin-top: var(--spacing-xs);
-}
+  }
 
-.strength-bar {
+  .strength-bar {
     height: 4px;
     width: 0;
     background-color: var(--color-danger);
     border-radius: var(--radius-full);
     transition: var(--transition-all);
-}
+  }
 
-.strength-text {
+  .strength-text {
     font-size: 0.75rem;
     margin-top: var(--spacing-xs);
     display: block;
-}
+  }
 
-.w-full {
+  .w-full {
     width: 100%;
-}
+  }
 
-.auth-alt-action {
+  .auth-alt-action {
     text-align: center;
     font-size: 0.875rem;
     color: var(--color-text-secondary);
-}
+  }
 
-.auth-alt-action a {
+  .auth-alt-action a {
     font-weight: 600;
-}
+  }
 
-.auth-alt-action a:hover {
+  .auth-alt-action a:hover {
     text-decoration: underline;
-}
+  }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 
-.fa-spin {
+  .fa-spin {
     animation: spin 1s linear infinite;
-}
+  }
 </style>

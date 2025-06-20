@@ -4,6 +4,7 @@ import (
 	"backendAuction/controllers"
 	"backendAuction/middleware"
 	"backendAuction/utils"
+	"backendAuction/config"
 	"log"
 	"net/http"
 	"os"
@@ -27,11 +28,7 @@ func main() {
 	// CORS middleware
 	router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			frontendURL := os.Getenv("FRONTEND_URL")
-			if frontendURL == "" {
-				frontendURL = "http://localhost:4321"
-			}
-
+			frontendURL := config.GetFrontendURL()
 			w.Header().Set("Access-Control-Allow-Origin", frontendURL)
 			w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization")
@@ -47,10 +44,7 @@ func main() {
 		})
 	})
 
-	dbURL := os.Getenv("DB_URL")
-	if dbURL == "" {
-		log.Fatal("DB_URL is not set in the environment")
-	}
+	dbURL := config.GetDBURL()
 	log.Println("Connecting to database at:", dbURL)
 
 	db := utils.InitDb(dbURL)
@@ -85,10 +79,7 @@ func main() {
 	})
 
 	// Start server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8000"
-	}
+	port := config.GetPort()
 
 	srv := &http.Server{
 		Handler:      router,
