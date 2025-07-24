@@ -1,10 +1,10 @@
 package main
 
 import (
+	"backendAuction/config"
 	"backendAuction/controllers"
 	"backendAuction/middleware"
 	"backendAuction/utils"
-	"backendAuction/config"
 	"log"
 	"net/http"
 	"os"
@@ -55,6 +55,7 @@ func main() {
 	authController := controllers.AuthController{DB: db}
 	auctionController := controllers.AuctionsController{DB: db}
 	favoritesController := controllers.FavoritesController{DB: db}
+	scrapingController := controllers.ScrapingController{DB: db}
 
 	// Auth routes
 	authSubrouter := router.PathPrefix("/auth").Subrouter()
@@ -71,6 +72,10 @@ func main() {
 	favoritesSubrouter.HandleFunc("", middleware.AuthMiddleware(favoritesController.GetFavorites)).Methods("GET", "OPTIONS")
 	favoritesSubrouter.HandleFunc("/add", middleware.AuthMiddleware(favoritesController.AddFavorite)).Methods("POST", "OPTIONS")
 	favoritesSubrouter.HandleFunc("/remove", middleware.AuthMiddleware(favoritesController.RemoveFavorite)).Methods("POST", "OPTIONS")
+
+	// Scraping routes
+	scrapingSubrouter := router.PathPrefix("/scraping").Subrouter()
+	scrapingSubrouter.HandleFunc("/start", scrapingController.StartScraping).Methods("POST", "OPTIONS")
 
 	// Health check route
 	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
