@@ -97,7 +97,11 @@ const hasMore = auctions.length === LIMIT;
     let loading = false;
     let hasMore = initialCount === LIMIT;
 
+    //trigger redeployment//
+
     /* ── Favorite button — event delegation covers initial + Load More cards ── */
+
+    
     document.addEventListener('click', async (e) => {
       const button = e.target.closest('.favorite-btn');
       if (!button) return;
