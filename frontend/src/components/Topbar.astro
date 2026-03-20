@@ -1,74 +1,98 @@
 ---
-import { Navbar, Nav } from 'react-bootstrap';
 const apiUrl = import.meta.env.VITE_API_URL;
+const path = Astro.url.pathname;
+const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
 ---
 
-<nav class="navbar">
-  <div class="navbar-container">
-    <a href="/" class="navbar-brand">
-      <img alt="icon" class="navbar-logo" src="https://i.postimg.cc/KYyDL9CX/letters-icon-25.png" />
-      <span class="brand-text">Auctions</span>
+<header class="site-header">
+  <div class="nav-bar">
+
+    <!-- Left: badge + wordmark -->
+    <a href="/" class="nav-brand" aria-label="Auction Intel home">
+      <span class="brand-badge">AC</span>
+      <span class="brand-name">AUCTION&COMPANY</span>
     </a>
 
-    <button class="menu-toggle" aria-label="Toggle menu" id="menuToggle" aria-expanded="false">
-      <span></span>
-      <span></span>
-      <span></span>
-    </button>
+    <!-- Right: links + actions (desktop) -->
+    <div class="nav-right">
+      <nav class="nav-links" aria-label="Site navigation">
+        <a href="/"          class={`nav-link${isActive('/')         ? ' active' : ''}`}>Home</a>
+        <a href="/favorites" class={`nav-link${isActive('/favorites')? ' active' : ''}`}
+           id="favLink" style="display:none">Favorites</a>
+        <a href="/about"     class={`nav-link${isActive('/about')    ? ' active' : ''}`}>About</a>
+      </nav>
 
-    <div class="navbar-menu" id="navbarMenu">
-      <a href="/" class="nav-link">
-        <i class="fas fa-home"></i>
-        <span>Home</span>
-      </a>
-      <div id="favoritesLink">
-        <a href="/favorites" class="nav-link">
-          <i class="far fa-heart"></i>
-          <span>Favorites</span>
-        </a>
-      </div>
-      <a href="/about" class="nav-link">
-        <i class="fas fa-info-circle"></i>
-        <span>About</span>
-      </a>
-      <div class="auth-links" id="authLinks">
-        <!-- Auth links will be updated dynamically -->
+      <div class="nav-actions">
+        <button id="theme-toggle" class="nav-icon-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
+          <i class="fas fa-moon" id="theme-icon"></i>
+        </button>
+        <div class="nav-auth" id="authLinks"></div>
       </div>
     </div>
+
+    <!-- Mobile: theme + burger -->
+    <div class="nav-mobile-actions">
+      <button id="theme-toggle-m" class="nav-icon-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
+        <i class="fas fa-moon" id="theme-icon-m"></i>
+      </button>
+      <button class="nav-burger" id="navBurger" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+
   </div>
-</nav>
+
+  <!-- Mobile menu dropdown -->
+  <div class="mobile-menu" id="mobileMenu" hidden aria-hidden="true">
+    <nav aria-label="Mobile navigation">
+      <a href="/"          class={`mobile-link${isActive('/')         ? ' active' : ''}`}>
+        <i class="fas fa-home"></i> Home
+      </a>
+      <a href="/favorites" class={`mobile-link${isActive('/favorites')? ' active' : ''}`}
+         id="mobFavLink" style="display:none">
+        <i class="far fa-heart"></i> Favorites
+      </a>
+      <a href="/about"     class={`mobile-link${isActive('/about')    ? ' active' : ''}`}>
+        <i class="fas fa-info-circle"></i> About
+      </a>
+    </nav>
+    <div class="mobile-divider"></div>
+    <div id="mobileAuthLinks"></div>
+  </div>
+</header>
 
 <script define:vars={{ apiUrl }}>
+  /* ── Auth state ── */
   const token = localStorage.getItem('jwt_token');
-  const authLinks = document.getElementById('authLinks');
-  const favoritesLink = document.getElementById('favoritesLink');
 
-  // Update auth links and favorites visibility based on token
+  const authEl    = document.getElementById('authLinks');
+  const mobileAuth= document.getElementById('mobileAuthLinks');
+  const favLink   = document.getElementById('favLink');
+  const mobFavLink= document.getElementById('mobFavLink');
+
   if (token) {
-    authLinks.innerHTML = `
-        <div class="nav-link logout-link" onclick="handleLogout()">
-            <i class="fas fa-sign-out-alt"></i>
-            <span>Logout</span>
-        </div>
-    `;
-    favoritesLink.style.display = 'block';
+    authEl.innerHTML = `
+      <span class="nav-link nav-logout" onclick="handleLogout()" role="button" tabindex="0">
+        Logout
+      </span>`;
+    mobileAuth.innerHTML = `
+      <span class="mobile-link mobile-logout" onclick="handleLogout()" role="button" tabindex="0">
+        <i class="fas fa-sign-out-alt"></i> Logout
+      </span>`;
+    if (favLink)    favLink.style.display    = '';
+    if (mobFavLink) mobFavLink.style.display = '';
   } else {
-    authLinks.innerHTML = `
-        <a href="/login" class="nav-link">
-            <i class="fas fa-sign-in-alt"></i>
-            <span>Login</span>
-        </a>
-        <a href="/register" class="nav-link nav-link-primary">
-            <i class="fas fa-user-plus"></i>
-            <span>Register</span>
-        </a>
-    `;
-    favoritesLink.style.display = 'none';
+    authEl.innerHTML = `
+      <a href="/login"    class="nav-link">Login</a>
+      <a href="/register" class="nav-link nav-register">Register</a>`;
+    mobileAuth.innerHTML = `
+      <a href="/login"    class="mobile-link"><i class="fas fa-sign-in-alt"></i> Login</a>
+      <a href="/register" class="mobile-link mobile-register"><i class="fas fa-user-plus"></i> Register</a>`;
   }
 
   async function handleLogout() {
     try {
-      const response = await fetch(`${apiUrl}/auth/logout`, {
+      await fetch(`${apiUrl}/auth/logout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -76,278 +100,378 @@ const apiUrl = import.meta.env.VITE_API_URL;
         },
         credentials: 'include',
       });
-
-      if (response.ok) {
-        localStorage.removeItem('jwt_token');
-        window.location.href = '/login';
-      } else {
-        console.error('Logout failed');
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
+    } catch (_) {}
+    localStorage.removeItem('jwt_token');
+    window.location.href = '/login';
   }
-
   window.handleLogout = handleLogout;
 
-  // Burger menu functionality
-  const menuToggle = document.getElementById('menuToggle');
-  const navbarMenu = document.getElementById('navbarMenu');
+  /* ── Theme toggle (synced across both desktop + mobile buttons) ── */
+  function setThemeIcons(t) {
+    const cls = t === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    const i1 = document.getElementById('theme-icon');
+    const i2 = document.getElementById('theme-icon-m');
+    if (i1) i1.className = cls;
+    if (i2) i2.className = cls;
+  }
+  setThemeIcons(document.documentElement.getAttribute('data-theme') || 'light');
 
-  menuToggle.addEventListener('click', () => {
-    menuToggle.classList.toggle('active');
-    navbarMenu.classList.toggle('active');
-    menuToggle.setAttribute('aria-expanded', menuToggle.classList.contains('active').toString());
+  function toggleTheme() {
+    const next = (document.documentElement.getAttribute('data-theme') || 'light') === 'dark'
+      ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+    setThemeIcons(next);
+  }
+  document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
+  document.getElementById('theme-toggle-m')?.addEventListener('click', toggleTheme);
+
+  /* ── Mobile burger ── */
+  const burger = document.getElementById('navBurger');
+  const mobileMenu = document.getElementById('mobileMenu');
+
+  burger?.addEventListener('click', () => {
+    const open = burger.getAttribute('aria-expanded') === 'true';
+    burger.setAttribute('aria-expanded', String(!open));
+    burger.classList.toggle('open', !open);
+    mobileMenu.hidden = open;
+    mobileMenu.setAttribute('aria-hidden', String(open));
   });
 
-  // Close menu when clicking outside
   document.addEventListener('click', (e) => {
     if (
-      !menuToggle.contains(e.target) &&
-      !navbarMenu.contains(e.target) &&
-      navbarMenu.classList.contains('active')
+      mobileMenu &&
+      !mobileMenu.hidden &&
+      !burger.contains(e.target) &&
+      !mobileMenu.contains(e.target)
     ) {
-      menuToggle.classList.remove('active');
-      navbarMenu.classList.remove('active');
+      burger.setAttribute('aria-expanded', 'false');
+      burger.classList.remove('open');
+      mobileMenu.hidden = true;
+      mobileMenu.setAttribute('aria-hidden', 'true');
     }
   });
 
-  // Close menu when clicking a link
-  navbarMenu.querySelectorAll('a').forEach((link) => {
-    link.addEventListener('click', () => {
-      menuToggle.classList.remove('active');
-      navbarMenu.classList.remove('active');
-    });
-  });
+  mobileMenu?.querySelectorAll('a').forEach((a) =>
+    a.addEventListener('click', () => {
+      burger.setAttribute('aria-expanded', 'false');
+      burger.classList.remove('open');
+      mobileMenu.hidden = true;
+      mobileMenu.setAttribute('aria-hidden', 'true');
+    })
+  );
 
-  // Handle escape key to close menu
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && navbarMenu.classList.contains('active')) {
-      menuToggle.classList.remove('active');
-      navbarMenu.classList.remove('active');
+    if (e.key === 'Escape' && mobileMenu && !mobileMenu.hidden) {
+      burger.setAttribute('aria-expanded', 'false');
+      burger.classList.remove('open');
+      mobileMenu.hidden = true;
+      mobileMenu.setAttribute('aria-hidden', 'true');
+      burger.focus();
     }
   });
 </script>
-<style>
-  .navbar {
+
+<style is:global>
+  /* ══════════════════════════════════════════════════════
+     Topbar — is:global so JS-injected auth links are styled.
+     All rules prefixed .site-header to avoid global leak.
+     Uses design-system CSS vars from Layout.astro which
+     already flip between light/dark automatically.
+     ══════════════════════════════════════════════════════ */
+
+  /* ── Header shell ── */
+  .site-header {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
-    background-color: var(--color-card);
-    box-shadow: var(--shadow-sm);
-    height: 4rem;
-    z-index: 50;
+    z-index: 100;
+    padding: 0.625rem 0.875rem;
   }
 
-  .navbar-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 var(--spacing-md);
-    height: 100%;
-    display: flex;
-    align-items: center;
+  /* ── Nav bar — frosted glass: subtle bg tint + blur ── */
+  .site-header .nav-bar {
+    background:     var(--nav-bar-bg, rgba(250, 250, 250, 0.72));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border:         1px solid var(--color-border-subtle);
+    border-radius:  10px;
+    padding:        0.375rem 0.375rem 0.375rem 0.5rem;
+    display:        flex;
+    align-items:    center;
     justify-content: space-between;
+    max-width:      1440px;
+    margin:         0 auto;
+    transition:     background 0.25s ease, border-color 0.25s ease;
   }
 
-  .navbar-brand {
-    display: flex;
+  [data-theme='dark'] .site-header .nav-bar {
+    --nav-bar-bg: rgba(9, 9, 11, 0.72);   /* zinc-950 at 72% */
+  }
+
+  /* ── Brand ── */
+  .site-header .nav-brand {
+    display:     flex;
     align-items: center;
-    gap: var(--spacing-sm);
-    text-decoration: none; /* Ensure brand is not underlined */
+    gap:         0.625rem;
+    text-decoration: none;
+    padding:     0.125rem 0.625rem 0.125rem 0.125rem;
+    flex-shrink: 0;
   }
 
-  .navbar-logo {
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: var(--radius-full);
-    object-fit: cover;
+  /* Badge auto-inverts: dark on light bg, white on dark bg */
+  .site-header .brand-badge {
+    width:       2rem;
+    height:      2rem;
+    background:  var(--color-text-primary);
+    color:       var(--color-bg);
+    border-radius: 6px;
+    display:     inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size:   0.6875rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+    font-family: 'Satoshi', system-ui, sans-serif;
+    transition:  background 0.25s ease, color 0.25s ease, opacity 0.15s ease;
   }
 
-  .brand-text {
-    font-size: 1.25rem;
+  .site-header .nav-brand:hover .brand-badge { opacity: 0.82; }
+
+  .site-header .brand-name {
+    font-family: Georgia, 'Palatino Linotype', serif;
+    font-size:   0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color:       var(--color-text-secondary);
+    transition:  color 0.25s ease;
+  }
+
+  /* ── Right cluster ── */
+  .site-header .nav-right {
+    display:     flex;
+    align-items: center;
+    gap:         0.25rem;
+  }
+
+  .site-header .nav-links {
+    display:     flex;
+    align-items: center;
+    gap:         0.25rem;
+  }
+
+  /* ── Base nav link ── */
+  .site-header .nav-link {
+    padding:       0.5rem 0.9375rem;
+    border-radius: 9999px;
+    font-size:     0.875rem;
+    font-weight:   500;
+    color:         var(--color-text-secondary);
+    text-decoration: none;
+    transition:    all 0.15s ease;
+    cursor:        pointer;
+    background:    none;
+    border:        none;
+    font-family:   inherit;
+    white-space:   nowrap;
+    letter-spacing: 0.01em;
+    line-height:   1;
+  }
+
+  .site-header .nav-link:hover {
+    color:      var(--color-text-primary);
+    background: var(--color-surface-raised);
+  }
+
+  /* Active: inverted pill — auto-correct in both themes */
+  .site-header .nav-link.active {
+    background:  var(--color-text-primary);
+    color:       var(--color-bg);
     font-weight: 600;
-    color: var(--color-primary);
   }
 
-  .navbar-menu {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-lg);
+  .site-header .nav-link.active:hover {
+    background:  var(--color-text-primary);
+    color:       var(--color-bg);
+    opacity:     0.88;
   }
 
-  .nav-link {
-    display: flex;
+  /* Register */
+  .site-header .nav-register {
+    border: 1px solid var(--color-border);
+  }
+  .site-header .nav-register:hover {
+    border-color: var(--color-text-secondary);
+  }
+
+  /* Logout */
+  .site-header .nav-logout {
+    color: var(--color-danger) !important;
+  }
+  .site-header .nav-logout:hover {
+    background: hsla(0, 72%, 51%, 0.08);
+    color:      var(--color-danger) !important;
+  }
+
+  /* ── Actions: theme icon + auth ── */
+  .site-header .nav-actions {
+    display:     flex;
     align-items: center;
-    gap: var(--spacing-xs);
-    padding: var(--spacing-xs) var(--spacing-sm);
-    border-radius: var(--radius-md);
-    color: var(--color-text-secondary);
+    gap:         0.125rem;
+    border-left: 1px solid var(--color-border);
+    margin-left: 0.5rem;
+    padding-left: 0.375rem;
+  }
+
+  .site-header .nav-auth {
+    display:     flex;
+    align-items: center;
+    gap:         0.125rem;
+  }
+
+  /* ── Icon button (theme toggle) ── */
+  .site-header .nav-icon-btn {
+    width:         2rem;
+    height:        2rem;
+    border-radius: 9999px;
+    background:    transparent;
+    border:        none;
+    color:         var(--color-text-muted);
+    cursor:        pointer;
+    display:       flex;
+    align-items:   center;
+    justify-content: center;
+    font-size:     0.8125rem;
+    transition:    all 0.15s ease;
+    flex-shrink:   0;
+  }
+
+  .site-header .nav-icon-btn:hover {
+    background: var(--color-surface-raised);
+    color:      var(--color-text-primary);
+  }
+
+  /* ── Mobile actions (hidden on desktop) ── */
+  .site-header .nav-mobile-actions { display: none; }
+
+  /* ── Burger ── */
+  .site-header .nav-burger {
+    width:         2rem;
+    height:        2rem;
+    border-radius: 6px;
+    background:    transparent;
+    border:        none;
+    cursor:        pointer;
+    display:       flex;
+    flex-direction: column;
+    align-items:   center;
+    justify-content: center;
+    gap:           4px;
+    padding:       0;
+    flex-shrink:   0;
+  }
+
+  .site-header .nav-burger span {
+    display:          block;
+    width:            15px;
+    height:           1.5px;
+    background:       var(--color-text-secondary);
+    border-radius:    9999px;
+    transition:       all 0.2s ease;
+    transform-origin: center;
+  }
+
+  .site-header .nav-burger:hover span { filter: brightness(1.2); }
+
+  .site-header .nav-burger.open span:nth-child(1) { transform: translateY(5.5px) rotate(45deg); }
+  .site-header .nav-burger.open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+  .site-header .nav-burger.open span:nth-child(3) { transform: translateY(-5.5px) rotate(-45deg); }
+
+  /* ══════════════════════════════════════════════════════
+     Mobile dropdown — needs solid bg since it overlays content
+     ══════════════════════════════════════════════════════ */
+  .site-header .mobile-menu {
+    background:    var(--color-surface);
+    border:        1px solid var(--color-border);
+    border-radius: 10px;
+    padding:       0.5rem;
+    margin-top:    0.375rem;
+    max-width:     1440px;
+    margin-left:   auto;
+    margin-right:  auto;
+    box-shadow:    var(--shadow-lg);
+    animation:     siteHeaderSlideDown 0.18s ease;
+  }
+
+  @keyframes siteHeaderSlideDown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .site-header .mobile-link {
+    display:     flex;
+    align-items: center;
+    gap:         0.75rem;
+    padding:     0.6875rem 0.875rem;
+    border-radius: 7px;
+    color:       var(--color-text-secondary);
+    font-size:   0.9375rem;
     font-weight: 500;
-    transition: var(--transition-all);
-    cursor: pointer;
-    border: none; /* Base style for links/buttons */
-    background: none; /* Base style */
-    font-size: inherit; /* Inherit font size */
-    font-family: inherit; /* Inherit font family */
-    text-decoration: none; /* Remove underline from links */
+    text-decoration: none;
+    transition:  all 0.15s ease;
+    cursor:      pointer;
+    background:  none;
+    border:      none;
+    width:       100%;
+    font-family: inherit;
+    letter-spacing: 0.01em;
   }
 
-  .nav-link i {
-    font-size: 1.125rem;
-    line-height: 1; /* Prevent icon from affecting line height */
+  .site-header .mobile-link i {
+    width:     1.125rem;
+    text-align: center;
+    font-size: 0.875rem;
+    opacity:   0.7;
+    flex-shrink: 0;
   }
 
-  .nav-link:hover {
-    color: var(--color-primary);
-    background-color: rgba(
-      59,
-      130,
-      246,
-      0.08
-    ); /* Light primary background on hover for standard links */
+  .site-header .mobile-link:hover {
+    background: var(--color-surface-raised);
+    color:      var(--color-text-primary);
   }
 
-  .nav-link-primary {
-    background-color: var(--color-primary);
-    color: white;
+  .site-header .mobile-link.active {
+    background:  var(--color-text-primary);
+    color:       var(--color-bg);
+    font-weight: 600;
+  }
+  .site-header .mobile-link.active i  { opacity: 1; }
+  .site-header .mobile-link.active:hover { opacity: 0.88; }
+
+  .site-header .mobile-register {
+    margin-top: 0.25rem;
+    border:     1px solid var(--color-border);
+  }
+  .site-header .mobile-register:hover {
+    border-color: var(--color-text-secondary);
   }
 
-  .nav-link-primary:hover {
-    background-color: var(--color-primary-dark);
-    color: white; /* Ensure text stays white */
+  .site-header .mobile-logout { color: var(--color-danger) !important; }
+  .site-header .mobile-logout:hover { background: hsla(0, 72%, 51%, 0.08); }
+
+  .site-header .mobile-divider {
+    height:     1px;
+    background: var(--color-border);
+    margin:     0.5rem 0.25rem;
   }
 
-  .auth-links {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-  }
-
-  /* --- Updated Logout Button Styles --- */
-  .logout-link {
-    /* Inherits display, align-items, gap, padding, border-radius, cursor, font-size, font-family, transition from .nav-link */
-    color: var(--color-danger); /* Use your danger color (e.g., red) for text */
-    border: 1px solid var(--color-danger); /* Use your danger color for the border */
-    background-color: transparent; /* Make background transparent */
-    font-weight: 500; /* Match other nav link weight */
-  }
-
-  .logout-link:hover {
-    color: white; /* White text on hover */
-    background-color: var(--color-danger); /* Fill with danger color on hover */
-    border-color: var(--color-danger); /* Keep border color consistent */
-    /* If the general .nav-link:hover background interferes, you might need !important */
-    /* background-color: var(--color-danger) !important; */
-  }
-  /* --- End of Updated Styles --- */
-
-  /* Burger Menu Button */
-  .menu-toggle {
-    display: none; /* Hidden by default on desktop */
-    background: none;
-    border: none;
-    padding: var(--spacing-sm);
-    cursor: pointer;
-    position: relative;
-    width: 2rem;
-    height: 2rem;
-  }
-
-  .menu-toggle span {
-    display: block;
-    width: 100%;
-    height: 2px;
-    background-color: var(--color-text-primary);
-    position: absolute;
-    left: 0;
-    transition: all 0.3s ease;
-  }
-
-  .menu-toggle span:first-child {
-    top: 25%;
-  }
-
-  .menu-toggle span:nth-child(2) {
-    top: 50%;
-    transform: translateY(-50%);
-  }
-
-  .menu-toggle span:last-child {
-    bottom: 25%;
-  }
-
-  /* Animated X when menu is open */
-  .menu-toggle.active span:first-child {
-    top: 50%;
-    transform: translateY(-50%) rotate(45deg);
-  }
-
-  .menu-toggle.active span:nth-child(2) {
-    opacity: 0;
-  }
-
-  .menu-toggle.active span:last-child {
-    bottom: 50%;
-    transform: translateY(50%) rotate(-45deg);
-  }
-
-  /* Mobile menu */
-  @media (max-width: 768px) {
-    .menu-toggle {
-      display: block; /* Show burger menu on mobile */
-    }
-
-    .navbar-menu {
-      position: fixed;
-      top: 4rem; /* Position below navbar */
-      left: 0;
-      right: 0;
-      background-color: var(--color-card);
-      padding: var(--spacing-md);
-      flex-direction: column;
-      align-items: stretch; /* Make items fill width */
-      gap: var(--spacing-md);
-      box-shadow: var(--shadow-lg);
-      transform: translateY(-100%);
-      opacity: 0;
-      pointer-events: none;
-      transition: all 0.3s ease;
-      border-top: 1px solid var(--color-border);
-      z-index: 49;
-    }
-
-    /* Show menu when active */
-    .navbar-menu.active {
-      transform: translateY(0);
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    .auth-links {
-      flex-direction: column;
-      width: 100%;
-      gap: var(--spacing-md);
-    }
-
-    .nav-link {
-      width: 100%;
-      justify-content: center;
-      padding: var(--spacing-sm) var(--spacing-md);
-      box-sizing: border-box;
-    }
-
-    .logout-link {
-      text-align: center;
-    }
-
-    #favoritesLink {
-      width: 100%;
-    }
-
-    /* Remove backdrop */
-    .navbar-menu.active {
-      background-color: var(--color-card);
-    }
+  /* ── Responsive ── */
+  @media (max-width: 640px) {
+    .site-header .nav-right          { display: none; }
+    .site-header .nav-mobile-actions { display: flex; align-items: center; gap: 0.25rem; }
+    .site-header .brand-name         { display: none; }
   }
 </style>

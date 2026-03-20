@@ -1,83 +1,114 @@
 package sites
 
 import (
+	"context"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/go-rod/rod"
+	"github.com/PuerkitoBio/goquery"
 )
 
-func ScrapPatriot() []Auction {
-	auctions := make([]Auction, 0)
-	logo := "/patriot.webp"
-	page := rod.New().MustConnect().MustPage("https://patriotauctioneers.com/auctions-in-massachusetts/")
-	page.MustWaitStable()
+const patriotBase = "https://patriotauctioneers.com"
+const patriotLogo = "/patriot.webp"
 
-	div := page.MustElement("#calendar > div")
-	as := div.MustElements("a")
+// ScrapPatriot fetches the Patriot Auctioneers listing page via Cloudflare
+// Browser Rendering, then fetches each individual auction detail page to
+// extract the deposit amount and status. The N+1 detail fetches are HTTP
+// requests to Cloudflare — no local browser tabs are opened.
+func ScrapPatriot(ctx context.Context) ([]Auction, error) {
+	html, err := CFetch(ctx, patriotBase+"/auctions-in-massachusetts/")
+	if err != nil {
+		return nil, fmt.Errorf("patriot: list page: %w", err)
+	}
 
-	for i, a := range as {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		return nil, fmt.Errorf("patriot: parse list: %w", err)
+	}
 
-		address := strings.TrimSpace(a.MustElement("h1").MustText())
-		href := "https://patriotauctioneers.com" + *a.MustAttribute("href")
-		fmt.Println(href)
-		date := strings.TrimSpace(a.MustElement(".auction-date").MustText())
+	var auctions []Auction
+	doc.Find("#calendar > div > a").Each(func(_ int, a *goquery.Selection) {
+		address := strings.TrimSpace(a.Find("h1").Text())
+		rawDate := strings.TrimSpace(a.Find(".auction-date").Text())
+		rawDate = strings.TrimSpace(strings.Split(rawDate, "Continued")[0])
 
-		date = strings.TrimSpace(strings.Split(date, "Continued")[0])
+		href, _ := a.Attr("href")
+		fullHref := patriotBase + href
 
-		page2 := page.Browser().MustPage(href)
-		page2.MustWaitStable()
-
-		deposit := strings.TrimSpace(strings.Split(page2.MustElement("#calendar > div:nth-child(2) > div > div.col-md-4 > div:nth-child(3) > p").MustText(), "deposit")[0])
-		var status string
-		err := rod.Try(func() {
-			status = strings.TrimSpace(page2.Timeout(2 * time.Second).MustElement("#calendar > div:nth-child(2) > div > div.col-md-4 > div:nth-child(1) > p > span.text-red > strong").MustText())
-		})
-
-		if err != nil {
-			status = "On Schedule"
-		}
-
-		// Parse and format the date
-		formattedDate, formattedTime := parseDateAndTimePatriot(date)
+		formattedDate, formattedTime := parseDateAndTimePatriot(rawDate)
+		deposit, status := patriotDetail(ctx, fullHref)
 
 		auctions = append(auctions, Auction{
-			Status:  status,
-			Street:  address,
-			Url:     href,
-			Date:    formattedDate,
-			Time:    formattedTime,
-			Deposit: deposit,
-			Logo:    logo,
+			SiteName: "patriot",
+			Logo:     patriotLogo,
+			Street:   address,
+			Url:      fullHref,
+			Date:     formattedDate,
+			Time:     formattedTime,
+			Deposit:  deposit,
+			Status:   status,
 		})
-		fmt.Println("patriot scrapping " + strconv.Itoa(i))
-		page2.MustClose()
-	}
-	page.Browser().Close()
-	return auctions
+	})
+
+	return auctions, nil
 }
 
+// patriotDetail fetches a single Patriot auction detail page and returns the
+// deposit string and status text. On any failure, safe defaults are returned
+// so the listing is still recorded with partial data.
+func patriotDetail(ctx context.Context, url string) (deposit, status string) {
+	html, err := CFetch(ctx, url)
+	if err != nil {
+		return "", "On Schedule"
+	}
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		return "", "On Schedule"
+	}
+
+	// Look for deposit in .auction-terms first (most reliable), then fall back
+	// to the old nth-child selector. Extract the first $X,XXX dollar amount found.
+	dollarRe := regexp.MustCompile(`\$[0-9,]+`)
+	termsText := doc.Find(".auction-terms").Text()
+	if termsText == "" {
+		termsText = doc.Find(
+			"#calendar > div:nth-child(2) > div > div.col-md-4 > div:nth-child(3) > p",
+		).Text()
+	}
+	if m := dollarRe.FindString(termsText); m != "" {
+		deposit = m
+	}
+
+	status = strings.TrimSpace(doc.Find(
+		"#calendar > div:nth-child(2) > div > div.col-md-4 > div:nth-child(1) > p > span.text-red > strong",
+	).Text())
+	if status == "" {
+		status = "On Schedule"
+	}
+
+	return deposit, status
+}
+
+// parseDateAndTimePatriot parses "Monday Mar 10 @ 11:00 am" into
+// ("2006-01-02", "11:00 am"). Returns empty strings on parse failure.
 func parseDateAndTimePatriot(dateTimeStr string) (string, string) {
-	// Regular expression to match "Monday Mar 10 @ 11:00 am"
 	re := regexp.MustCompile(`(\w+ \w+ \d+) @ (\d+:\d+ [ap]m)`)
 	match := re.FindStringSubmatch(dateTimeStr)
-
-	if len(match) == 3 {
-		dateStr := strings.TrimSpace(match[1])
-		timeStr := strings.TrimSpace(match[2])
-		parsedDate, err := time.Parse("Monday Jan 2", dateStr)
-		if err != nil {
-			fmt.Println("Error parsing date:", err)
-			return "", timeStr
-		}
-		// Add the current year to the parsed date
-		currentYear := time.Now().Year()
-		parsedDate = parsedDate.AddDate(currentYear-parsedDate.Year(), 0, 0)
-		formattedDate := parsedDate.Format("2006-01-02")
-		return formattedDate, timeStr
+	if len(match) != 3 {
+		return "", ""
 	}
-	return "", "" // Return empty if no match
+
+	dateStr := strings.TrimSpace(match[1])
+	timeStr := strings.TrimSpace(match[2])
+
+	parsedDate, err := time.Parse("Monday Jan 2", dateStr)
+	if err != nil {
+		return "", timeStr
+	}
+
+	currentYear := time.Now().Year()
+	parsedDate = parsedDate.AddDate(currentYear-parsedDate.Year(), 0, 0)
+	return parsedDate.Format("2006-01-02"), timeStr
 }

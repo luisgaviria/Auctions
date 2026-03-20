@@ -1,30 +1,23 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import Card from '../components/Card.astro';
 
-const apiUrl = import.meta.env.VITE_API_URL;
+const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 ---
 
 <Layout title="My Favorites">
   <div class="favorites-page">
     <div class="container">
       <header class="page-header">
-        <h1>My Favorite Auctions</h1>
-        <p class="text-secondary">Keep track of auctions you're interested in</p>
+        <h1>My Favorites</h1>
+        <p class="text-secondary">Auctions you're tracking</p>
       </header>
 
       <div class="card-grid" id="favorites-container">
         <div class="empty-state">
           <i class="far fa-heart"></i>
           <h2>No favorites yet</h2>
-          <p>
-            When you find auctions you're interested in, mark them as favorites to keep track of
-            them here.
-          </p>
-          <a href="/" class="btn btn-primary">
-            <i class="fas fa-search"></i>
-            Browse Auctions
-          </a>
+          <p>Mark auctions as favorites to track them here.</p>
+          <a href="/" class="btn btn-primary">Browse Auctions</a>
         </div>
       </div>
     </div>
@@ -32,6 +25,73 @@ const apiUrl = import.meta.env.VITE_API_URL;
 </Layout>
 
 <script define:vars={{ apiUrl }}>
+  /* ── Status category helper ── */
+  function getStatusCategory(s) {
+    const lower = (s || '').toLowerCase();
+    if (lower.includes('postponed')) return 'postponed';
+    if (!s || lower === 'date tbd' || lower === 'tbd') return 'muted';
+    return 'active';
+  }
+
+  /* ── Card HTML (terminal layout, favorited state) ── */
+  function createFavoriteCardHTML(auction) {
+    const date = auction.date || '—';
+    const time = auction.time || '';
+    const deposit = auction.deposit || '—';
+    const address = auction.address || 'Address not available';
+    const status = auction.status || 'On Schedule';
+    const safeLink = (auction.link || '#').replace(/"/g, '&quot;');
+    const safeAddress = address.replace(/"/g, '&quot;');
+    const statusCat = getStatusCategory(status);
+
+    const locationLine =
+      auction.city && auction.state
+        ? `<p class="location-line">${auction.city}, ${auction.state}</p>`
+        : '';
+
+    const logoHtml = auction.logo
+      ? `<img src="${auction.logo}" alt="" class="auctioneer-logo" loading="lazy" aria-hidden="true" />`
+      : '';
+
+    return `
+      <a href="${safeLink}" target="_blank" rel="noopener noreferrer"
+         class="card auction-card" aria-label="View auction: ${safeAddress}">
+        <div class="card-body">
+          <div class="card-top">
+            <span class="status-pill" data-status="${statusCat}">${status}</span>
+            ${logoHtml}
+          </div>
+          <h3 class="property-address">${address}</h3>
+          ${locationLine}
+          <div class="terminal-block">
+            <div class="terminal-col">
+              <span class="terminal-label">Date</span>
+              <span class="terminal-value">${date}</span>
+            </div>
+            <div class="terminal-col">
+              <span class="terminal-label">Time</span>
+              <span class="terminal-value${time ? '' : ' terminal-value--tbd'}">${time || 'TBD'}</span>
+            </div>
+            <div class="terminal-col">
+              <span class="terminal-label">Deposit</span>
+              <span class="terminal-value">${deposit}</span>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="favorite-btn"
+              data-auction-id="${auction.id}"
+              data-loading="false"
+              title="Remove from favorites"
+              aria-pressed="true"
+              aria-label="Remove from favorites">
+              <i class="fas fa-heart"></i>
+              <div class="fav-spinner"></div>
+            </button>
+          </div>
+        </div>
+      </a>`;
+  }
+
   async function loadFavorites() {
     if (!localStorage.getItem('jwt_token')) {
       window.location.href = '/login';
@@ -40,368 +100,120 @@ const apiUrl = import.meta.env.VITE_API_URL;
 
     const container = document.getElementById('favorites-container');
 
-    try {
-      container.innerHTML = `
-            <div class="loading-state">
-                <div class="loading-spinner"></div>
-                <p>Loading your favorites...</p>
-            </div>
-        `;
+    container.innerHTML = `
+      <div class="loading-state">
+        <div class="page-spinner"></div>
+        <p>Loading favorites…</p>
+      </div>`;
 
+    try {
       const response = await fetch(`${apiUrl}/favorites`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('jwt_token')}`,
-        },
+        headers: { Authorization: `Bearer ${localStorage.getItem('jwt_token')}` },
         credentials: 'include',
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to load favorites');
-      }
+      if (!response.ok) throw new Error('Failed to load favorites');
 
       const data = await response.json();
 
       if (data.auctions.length === 0) {
         container.innerHTML = `
-                <div class="empty-state">
-                    <i class="far fa-heart"></i>
-                    <h2>No favorites yet</h2>
-                    <p>When you find auctions you're interested in, mark them as favorites to keep track of them here.</p>
-                    <a href="/" class="btn btn-primary">
-                        <i class="fas fa-search"></i>
-                        Browse Auctions
-                    </a>
-                </div>
-            `;
+          <div class="empty-state">
+            <i class="far fa-heart"></i>
+            <h2>No favorites yet</h2>
+            <p>Mark auctions as favorites to track them here.</p>
+            <a href="/" class="btn btn-primary">Browse Auctions</a>
+          </div>`;
         return;
       }
 
-      // Convert auctions data into card HTML
-      const cards = data.auctions
-        .map(
-          (auction) => `
-            <article class="card auction-card">
-                <div class="card-image">
-                    <img src="${auction.logo}" alt="auction company logo" class="auction-logo" />
-                    <div class="card-badges">
-                        <span class="badge status-badge">
-                            <i class="fas fa-clock"></i>
-                            ${auction.status || 'On Schedule'}
-                        </span>
-                        <button class="favorite-btn" data-auction-id="${auction.id}" data-loading="false" title="Remove from favorites">
-                            <i class="fas fa-heart"></i>
-                            <div class="loading-spinner"></div>
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="card-content">
-                    <div class="card-header">
-                        <div class="card-date">
-                            <i class="far fa-calendar-alt"></i>
-                            <time datetime="${auction.date}">${auction.date || 'Date TBD'}</time>
-                        </div>
-                        <a href="${auction.link}" target="_blank" rel="noopener noreferrer" class="external-link" title="View auction details">
-                            <i class="fas fa-external-link-alt"></i>
-                        </a>
-                    </div>
-
-                    <div class="location-info">
-                        <div class="address">
-                            <i class="fas fa-map-marker-alt"></i>
-                            <span>${auction.address || 'Address not available'}</span>
-                        </div>
-                        ${
-                          auction.city && auction.state
-                            ? `
-                            <div class="city-state">
-                                <i class="fas fa-city"></i>
-                                <span>${auction.city}, ${auction.state}</span>
-                            </div>
-                        `
-                            : ''
-                        }
-                    </div>
-
-                    ${
-                      auction.deposit
-                        ? `
-                        <div class="deposit-info">
-                            <i class="fas fa-money-bill-wave"></i>
-                            <span>Deposit: ${auction.deposit}</span>
-                        </div>
-                    `
-                        : ''
-                    }
-                </div>
-            </article>
-            <style>
- .auction-card {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    overflow: hidden;
-}
-
-.card-image {
-    position: relative;
-    padding-top: 56.25%; /* 16:9 aspect ratio */
-    background-color: var(--color-bg);
-    overflow: hidden;
-}
-
-.auction-logo {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: var(--transition-all);
-}
-
-.auction-card:hover .auction-logo {
-    transform: scale(1.05);
-}
-
-.card-badges {
-    position: absolute;
-    top: var(--spacing-sm);
-    left: var(--spacing-sm);
-    right: var(--spacing-sm);
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    z-index: 1;
-}
-
-.badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    padding: var(--spacing-xs) var(--spacing-sm);
-    border-radius: var(--radius-full);
-    font-size: 0.875rem;
-    font-weight: 500;
-}
-
-.status-badge {
-    background-color: var(--color-primary);
-    color: white;
-}
-
-.favorite-btn {
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: var(--radius-full);
-    background-color: white;
-    color: var(--color-danger);
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.125rem;
-    transition: var(--transition-all);
-    position: relative;
-}
-
-.favorite-btn:hover {
-    transform: scale(1.1);
-    box-shadow: var(--shadow-md);
-}
-
-.favorite-btn[data-loading="true"] i {
-    opacity: 0;
-}
-
-.loading-spinner {
-    display: none;
-    position: absolute;
-    width: 1.25rem;
-    height: 1.25rem;
-    border: 2px solid var(--color-danger);
-    border-radius: var(--radius-full);
-    border-top-color: transparent;
-    animation: spin 0.6s linear infinite;
-}
-
-.favorite-btn[data-loading="true"] .loading-spinner {
-    display: block;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-.card-content {
-    padding: var(--spacing-lg);
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-md);
-    flex: 1;
-}
-
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.card-date {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    color: var(--color-text-secondary);
-    font-size: 0.875rem;
-}
-
-.external-link {
-    width: 2rem;
-    height: 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-full);
-    color: var(--color-text-secondary);
-    transition: var(--transition-all);
-}
-
-.external-link:hover {
-    background-color: var(--color-bg);
-    color: var(--color-primary);
-}
-
-.location-info {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-sm);
-}
-
-.address, .city-state {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    color: var(--color-text-primary);
-}
-
-.address i, .city-state i {
-    color: var(--color-text-secondary);
-    width: 1rem;
-}
-
-.deposit-info {
-    margin-top: auto;
-    padding-top: var(--spacing-md);
-    border-top: 1px solid var(--color-border);
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    color: var(--color-primary);
-    font-weight: 600;
-}
-
-.deposit-info i {
-    color: var(--color-success);
-}
-                </style>
-        `
-        )
-        .join('');
-
-      container.innerHTML = cards;
-    } catch (error) {
-      console.error('Error loading favorites:', error);
+      container.innerHTML = data.auctions.map(createFavoriteCardHTML).join('');
+    } catch {
       container.innerHTML = `
-            <div class="error-state">
-                <i class="fas fa-exclamation-circle"></i>
-                <h2>Error loading favorites</h2>
-                <p>There was a problem loading your favorites. Please try again later.</p>
-                <button onclick="loadFavorites()" class="btn btn-primary">
-                    <i class="fas fa-redo"></i>
-                    Try Again
-                </button>
-            </div>
-        `;
+        <div class="error-state">
+          <i class="fas fa-exclamation-circle"></i>
+          <h2>Error loading favorites</h2>
+          <p>Something went wrong. Please try again.</p>
+          <button onclick="loadFavorites()" class="btn btn-primary">Try Again</button>
+        </div>`;
     }
   }
 
-  // Initialize on page load
-  document.addEventListener('DOMContentLoaded', () => {
-    loadFavorites();
+  /* ── Favorite removal via event delegation ── */
+  document.addEventListener('click', async (e) => {
+    const button = e.target.closest('.favorite-btn');
+    if (!button) return;
 
-    // Listen for favorite removal events and check if we need to show empty state
-    document.addEventListener('click', async (e) => {
-      const button = e.target.closest('.favorite-btn');
-      if (!button) return;
+    e.preventDefault();
+    e.stopPropagation();
 
-      // If it's a favorited item (has fas class)
-      const icon = button.querySelector('i');
-      if (icon && icon.classList.contains('fas')) {
-        // Wait for the removal animation
-        await new Promise((resolve) => setTimeout(resolve, 300));
+    if (!localStorage.getItem('jwt_token')) {
+      window.location.href = '/login';
+      return;
+    }
 
-        // Check if there are any favorite cards left
-        const remainingCards = document.querySelectorAll('.auction-card');
-        if (remainingCards.length === 0) {
-          loadFavorites(); // This will show the empty state
-        }
+    if (button.dataset.loading === 'true') return;
+
+    const auctionId = parseInt(button.dataset.auctionId, 10);
+    if (isNaN(auctionId)) return;
+
+    const icon = button.querySelector('i');
+    const isFavorited = icon.classList.contains('fas');
+
+    try {
+      button.dataset.loading = 'true';
+      const endpoint = isFavorited ? 'remove' : 'add';
+      const response = await fetch(`${apiUrl}/favorites/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('jwt_token')}`,
+        },
+        body: JSON.stringify({ auction_id: auctionId }),
+        credentials: 'include',
+      });
+
+      if (response.ok && isFavorited) {
+        // Remove card from favorites view
+        const card = button.closest('.auction-card');
+        if (card) card.remove();
+        const remaining = document.querySelectorAll('.auction-card');
+        if (remaining.length === 0) loadFavorites();
       }
-    });
+    } catch {
+      /* silently ignore */
+    } finally {
+      button.dataset.loading = 'false';
+    }
   });
+
+  document.addEventListener('astro:page-load', loadFavorites);
 </script>
 
 <style>
-  /* ==========================================================================
-       Page Layout
-       ========================================================================== */
-
   .favorites-page {
-    padding-top: calc(4rem + var(--spacing-xl, 2rem));
-    padding-bottom: var(--spacing-2xl, 3rem);
-  }
-
-  .container {
-    max-width: 1200px;
-    margin-left: auto;
-    margin-right: auto;
-    padding-left: var(--spacing-md, 1rem);
-    padding-right: var(--spacing-md, 1rem);
+    padding-top: calc(4rem + var(--spacing-xl));
+    padding-bottom: var(--spacing-2xl);
   }
 
   .page-header {
     text-align: center;
-    margin-bottom: var(--spacing-2xl, 3rem);
+    margin-bottom: var(--spacing-2xl);
   }
 
   .page-header h1 {
-    font-size: clamp(1.8rem, 5vw, 2.5rem);
-    font-weight: 700;
-    color: var(--color-text-heading, var(--color-text-primary));
-    margin-bottom: var(--spacing-sm, 0.5rem);
+    font-size: 2rem;
+    margin-bottom: var(--spacing-xs);
   }
-
-  .page-header p.text-secondary {
-    font-size: 1rem;
-    color: var(--color-text-secondary);
-    max-width: 60ch;
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  /* ==========================================================================
-       Card Grid & States
-       ========================================================================== */
 
   .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
-    gap: var(--spacing-lg, 1.5rem);
-    padding-top: var(--spacing-lg, 1.5rem);
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-lg);
+    padding-top: var(--spacing-lg);
     min-height: 300px;
   }
 
-  /* State Containers */
   .empty-state,
   .error-state,
   .loading-state {
@@ -411,207 +223,51 @@ const apiUrl = import.meta.env.VITE_API_URL;
     align-items: center;
     justify-content: center;
     text-align: center;
-    padding: var(--spacing-2xl, 3rem) var(--spacing-lg, 1.5rem);
-    gap: var(--spacing-md, 1rem);
-    background-color: var(--color-card);
-    border-radius: var(--radius-lg, 0.75rem);
-    box-shadow: var(--shadow-md);
-    border: 1px solid var(--color-border);
-    color: var(--color-text-secondary);
+    padding: var(--spacing-2xl);
+    gap: var(--spacing-md);
   }
 
   .empty-state i,
   .error-state i {
-    font-size: 3rem;
-    margin-bottom: var(--spacing-sm, 0.5rem);
-    color: var(--color-primary-light, var(--color-primary));
-  }
-
-  .error-state i {
-    color: var(--color-danger);
+    font-size: 2.5rem;
+    color: var(--color-text-muted);
   }
 
   .empty-state h2,
   .error-state h2 {
     font-size: 1.25rem;
-    font-weight: 600;
     color: var(--color-text-primary);
-    margin-bottom: var(--spacing-xs, 0.25rem);
   }
 
   .empty-state p,
   .error-state p {
-    font-size: 0.95rem;
-    max-width: 450px;
-    line-height: 1.6;
-    margin-bottom: var(--spacing-lg, 1.5rem);
+    color: var(--color-text-secondary);
+    max-width: 400px;
   }
 
-  .loading-state p {
-    font-weight: 500;
-  }
-
-  .loading-state .loading-spinner {
-    width: 2.5rem;
-    height: 2.5rem;
-    border: 4px solid var(--color-border);
-    border-top-color: var(--color-primary);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: var(--spacing-md, 1rem);
+  .page-spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-accent);
+    border-radius: var(--radius-full);
+    animation: spin 0.8s linear infinite;
+    margin-bottom: var(--spacing-sm);
   }
 
   @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
+    to { transform: rotate(360deg); }
   }
 
-  /* Buttons */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-sm, 0.5rem);
-    padding: var(--spacing-sm, 0.5rem) var(--spacing-lg, 1.5rem);
-    font-weight: 600;
-    font-size: 0.95rem;
-    border-radius: var(--radius-md, 0.375rem);
-    transition: all 0.2s ease;
-    cursor: pointer;
-    border: none;
-    text-decoration: none;
-    line-height: 1.5;
+  @media (max-width: 1024px) {
+    .card-grid { grid-template-columns: repeat(2, 1fr); }
   }
 
-  .btn i {
-    font-size: 1.1em;
-  }
-
-  .btn-primary {
-    background-color: var(--color-primary);
-    color: white;
-    box-shadow: var(--shadow-sm);
-  }
-
-  .btn-primary:hover {
-    background-color: var(--color-primary-dark, var(--color-primary));
-    box-shadow: var(--shadow-md);
-  }
-  .btn-primary:active {
-    transform: scale(0.98);
-  }
-
-  /* ==========================================================================
-       Toast Notifications (Basic Styling)
-       ========================================================================== */
-
-  .toast {
-    position: fixed;
-    bottom: 2rem;
-    left: 50%;
-    transform: translateX(-50%) translateY(100px); /* Start off-screen */
-    background-color: var(--color-text-heading, #333);
-    color: white;
-    padding: var(--spacing-md, 1rem) var(--spacing-lg, 1.5rem);
-    border-radius: var(--radius-md, 0.375rem);
-    box-shadow: var(--shadow-lg);
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm, 0.5rem);
-    opacity: 0;
-    transition:
-      transform 0.3s ease,
-      opacity 0.3s ease;
-  }
-
-  .toast.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0); /* Slide in */
-  }
-
-  .toast i {
-    font-size: 1.2em;
-  }
-
-  .toast.success {
-    background-color: var(--color-success-dark, var(--color-success));
-  }
-  .toast.error {
-    background-color: var(--color-danger-dark, var(--color-danger));
-  }
-  .toast.info {
-    background-color: var(--color-primary);
-  }
-
-  /* ==========================================================================
-       Animations
-       ========================================================================== */
-
-  @keyframes fadeOut {
-    to {
-      opacity: 0;
-      transform: scale(0.95); /* Optional shrink effect */
-    }
-  }
-
-  @keyframes spin {
-    0% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-
-  /* ==========================================================================
-       Media Queries (Responsiveness)
-       ========================================================================== */
-
-  @media (max-width: 768px) {
-    .favorites-page {
-      padding-top: calc(4rem + var(--spacing-lg, 1.5rem)); /* Adjust top padding */
-    }
-
-    .page-header {
-      margin-bottom: var(--spacing-xl, 2rem);
-    }
-
+  @media (max-width: 640px) {
+    .page-header h1 { font-size: 1.625rem; }
     .card-grid {
-      gap: var(--spacing-md, 1rem); /* Reduce gap */
-    }
-
-    .empty-state,
-    .error-state,
-    .loading-state {
-      padding: var(--spacing-xl, 2rem) var(--spacing-md, 1rem);
-      margin: 0 var(--spacing-sm); /* Add small margin instead of spanning full width */
-    }
-
-    .empty-state h2,
-    .error-state h2 {
-      font-size: 1.1rem;
-    }
-    .empty-state p,
-    .error-state p {
-      font-size: 0.9rem;
-    }
-
-    .card-content {
-      padding: var(--spacing-md, 1rem); /* Reduce padding */
-      gap: var(--spacing-sm, 0.5rem); /* Reduce gap */
-    }
-    .card-date {
-      font-size: 0.8rem;
-    }
-    .address,
-    .city-state,
-    .deposit-info {
-      font-size: 0.875rem;
-    }
-    .deposit-info {
-      padding-top: var(--spacing-sm, 0.5rem);
+      grid-template-columns: 1fr;
+      gap: var(--spacing-md);
     }
   }
 </style>

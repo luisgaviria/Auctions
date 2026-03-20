@@ -3,15 +3,14 @@ import Layout from '../layouts/Layout.astro';
 import Card from '../components/Card.astro';
 import axios, { AxiosError } from 'axios';
 
-const apiUrl = import.meta.env.VITE_API_URL;
+const LIMIT = 20;
+const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 let auctions = [];
 let error: string | null = null;
 
 try {
-  const response = await axios.get(`${apiUrl}/auctions`, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
+  const response = await axios.get(`${apiUrl}/auctions?limit=${LIMIT}&offset=0`, {
+    headers: { 'Content-Type': 'application/json' },
   });
   auctions = response.data.auctions;
 } catch (e) {
@@ -24,14 +23,19 @@ try {
     error = 'An unexpected error occurred';
   }
 }
+
+const hasMore = auctions.length === LIMIT;
 ---
 
-<Layout title="Auctions">
+<Layout
+  title="Auctions"
+  description="Browse upcoming real estate auctions in Massachusetts. Dates, deposits, and auctioneer details — updated daily."
+>
   <div class="auctions-page">
     <div class="container">
       <header class="page-header">
-        <h1>Available Auctions</h1>
-        <p class="text-secondary">Discover and track upcoming property auctions</p>
+        <h1>Upcoming Property Auctions</h1>
+        <p class="text-secondary">Massachusetts · updated daily</p>
       </header>
 
       {
@@ -46,67 +50,268 @@ try {
             </button>
           </div>
         ) : (
-          <div class="card-grid" id="auctions-grid">
-            {auctions.length === 0 ? (
-              <div class="empty-state">
-                <i class="fas fa-search" />
-                <h2>No auctions available</h2>
-                <p>There are currently no auctions listed. Please check back later.</p>
-              </div>
-            ) : (
-              auctions.map((auction: any) => (
-                <Card
-                  id={auction.id}
-                  link={auction.link}
-                  date={auction.date}
-                  address={auction.address}
-                  city={auction.city}
-                  state={auction.state}
-                  status={auction.status}
-                  deposit={auction.deposit}
-                  logo={auction.logo}
-                />
-              ))
-            )}
-          </div>
+          <>
+            <div class="card-grid" id="auctions-grid">
+              {auctions.length === 0 ? (
+                <div class="empty-state">
+                  <i class="fas fa-search" />
+                  <h2>No auctions available</h2>
+                  <p>There are currently no auctions listed. Please check back later.</p>
+                </div>
+              ) : (
+                auctions.map((auction: any) => (
+                  <Card
+                    id={auction.id}
+                    link={auction.link}
+                    date={auction.date}
+                    time={auction.time}
+                    address={auction.address}
+                    city={auction.city}
+                    state={auction.state}
+                    status={auction.status}
+                    deposit={auction.deposit}
+                    logo={auction.logo}
+                  />
+                ))
+              )}
+            </div>
+            <div class="load-more-wrapper">
+              <button
+                id="load-more-btn"
+                class="btn btn-primary"
+                style={hasMore ? '' : 'display:none'}
+              >
+                Load More
+              </button>
+            </div>
+          </>
         )
       }
     </div>
   </div>
 </Layout>
 
-<script define:vars={{ apiUrl }}>
-  // Check favorite status for all auctions when page loads
-  async function checkFavoriteStatus() {
-    if (!localStorage.getItem('jwt_token')) return;
+<script define:vars={{ apiUrl, initialCount: auctions.length, LIMIT }}>
+  (function () {
+    let offset = initialCount;
+    let loading = false;
+    let hasMore = initialCount === LIMIT;
 
-    try {
-      const response = await fetch(`${apiUrl}/favorites`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('jwt_token')}`,
-        },
-        credentials: 'include',
-      });
+    /* ── Favorite button — event delegation covers initial + Load More cards ── */
+    document.addEventListener('click', async (e) => {
+      const button = e.target.closest('.favorite-btn');
+      if (!button) return;
 
-      if (response.ok) {
+      // Prevent the parent <a> card from navigating when heart is clicked
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!localStorage.getItem('jwt_token')) {
+        window.location.href = '/login';
+        return;
+      }
+
+      if (button.dataset.loading === 'true') return;
+
+      const auctionId = parseInt(button.dataset.auctionId, 10);
+      if (isNaN(auctionId)) return;
+
+      const icon = button.querySelector('i');
+      const isFavorited = icon.classList.contains('fas');
+
+      try {
+        button.dataset.loading = 'true';
+        const endpoint = isFavorited ? 'remove' : 'add';
+        const response = await fetch(`${apiUrl}/favorites/${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('jwt_token')}`,
+          },
+          body: JSON.stringify({ auction_id: auctionId }),
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          icon.classList.toggle('far');
+          icon.classList.toggle('fas');
+          button.setAttribute('aria-pressed', String(!isFavorited));
+          showToast(
+            isFavorited ? 'Removed from favorites' : 'Added to favorites',
+            isFavorited ? 'info' : 'success'
+          );
+        } else {
+          showToast('Error updating favorites', 'error');
+        }
+      } catch {
+        showToast('Network error occurred', 'error');
+      } finally {
+        button.dataset.loading = 'false';
+      }
+    });
+
+    /* ── Favorite status sync ── */
+    async function checkFavoriteStatus() {
+      if (!localStorage.getItem('jwt_token')) return;
+      try {
+        const response = await fetch(`${apiUrl}/favorites`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('jwt_token')}` },
+          credentials: 'include',
+        });
+        if (!response.ok) return;
         const data = await response.json();
-        const favoriteIds = new Set(data.auctions.map((auction) => auction.id));
-
-        document.querySelectorAll('.favorite-btn').forEach((button) => {
-          const auctionId = parseInt(button.dataset.auctionId, 10);
-          const icon = button.querySelector('i');
-          if (favoriteIds.has(auctionId)) {
-            icon.classList.remove('far');
-            icon.classList.add('fas');
+        const favoriteIds = new Set((data.auctions || []).map((a) => a.id));
+        document.querySelectorAll('.favorite-btn').forEach((btn) => {
+          const id = parseInt(btn.dataset.auctionId, 10);
+          const icon = btn.querySelector('i');
+          if (favoriteIds.has(id)) {
+            icon.classList.replace('far', 'fas');
+          } else {
+            icon.classList.replace('fas', 'far');
           }
         });
+      } catch {
+        /* silently ignore — user may not be logged in */
       }
-    } catch (error) {
-      console.error('Error checking favorites:', error);
     }
-  }
 
-  document.addEventListener('DOMContentLoaded', checkFavoriteStatus);
+    /* ── Status category helper ── */
+    function getStatusCategory(s) {
+      const lower = (s || '').toLowerCase();
+      if (lower.includes('postponed')) return 'postponed';
+      if (!s || lower === 'date tbd' || lower === 'tbd') return 'muted';
+      return 'active';
+    }
+
+    /* ── Card HTML generator — mirrors Card.astro terminal layout ── */
+    function createCardHTML(auction) {
+      const date = auction.date || '—';
+      const time = auction.time || '';
+      const deposit = auction.deposit || '—';
+      const address = auction.address || 'Address not available';
+      const status = auction.status || 'On Schedule';
+      const safeLink = (auction.link || '#').replace(/"/g, '&quot;');
+      const safeAddress = address.replace(/"/g, '&quot;');
+      const statusCat = getStatusCategory(status);
+
+      const locationLine =
+        auction.city && auction.state
+          ? `<p class="location-line">${auction.city}, ${auction.state}</p>`
+          : '';
+
+      const logoHtml = auction.logo
+        ? `<img src="${auction.logo}" alt="" class="auctioneer-logo" loading="lazy" aria-hidden="true" />`
+        : '';
+
+      return `
+        <a href="${safeLink}" target="_blank" rel="noopener noreferrer"
+           class="card auction-card" aria-label="View auction: ${safeAddress}">
+          <div class="card-body">
+            <div class="card-top">
+              <span class="status-pill" data-status="${statusCat}">${status}</span>
+              ${logoHtml}
+            </div>
+            <h3 class="property-address">${address}</h3>
+            ${locationLine}
+            <div class="terminal-block">
+              <div class="terminal-col">
+                <span class="terminal-label">Date</span>
+                <span class="terminal-value">${date}</span>
+              </div>
+              <div class="terminal-col">
+                <span class="terminal-label">Time</span>
+                <span class="terminal-value${time ? '' : ' terminal-value--tbd'}">${time || 'TBD'}</span>
+              </div>
+              <div class="terminal-col">
+                <span class="terminal-label">Deposit</span>
+                <span class="terminal-value">${deposit}</span>
+              </div>
+            </div>
+            <div class="card-footer">
+              <button class="favorite-btn"
+                data-auction-id="${auction.id}"
+                data-loading="false"
+                title="Add to favorites"
+                aria-pressed="false"
+                aria-label="Add to favorites">
+                <i class="far fa-heart"></i>
+                <div class="fav-spinner"></div>
+              </button>
+            </div>
+          </div>
+        </a>`;
+    }
+
+    /* ── Load More ── */
+    async function loadMore() {
+      if (loading || !hasMore) return;
+      loading = true;
+
+      const btn = document.getElementById('load-more-btn');
+      const origText = btn.textContent;
+      btn.textContent = 'Loading…';
+      btn.disabled = true;
+
+      try {
+        const response = await fetch(`${apiUrl}/auctions?limit=${LIMIT}&offset=${offset}`);
+        if (!response.ok) throw new Error('Server error');
+        const data = await response.json();
+        const newAuctions = data.auctions || [];
+
+        const grid = document.getElementById('auctions-grid');
+        newAuctions.forEach((auction) => {
+          const temp = document.createElement('div');
+          temp.innerHTML = createCardHTML(auction).trim();
+          grid.appendChild(temp.firstElementChild);
+        });
+
+        offset += newAuctions.length;
+
+        if (newAuctions.length < LIMIT) {
+          hasMore = false;
+          btn.style.display = 'none';
+        }
+
+        await checkFavoriteStatus();
+      } catch {
+        showToast('Failed to load more auctions', 'error');
+      } finally {
+        loading = false;
+        if (hasMore) {
+          btn.textContent = origText;
+          btn.disabled = false;
+        }
+      }
+    }
+
+    /* ── Toast helper ── */
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.setAttribute('role', 'alert');
+      const icon = document.createElement('i');
+      icon.className = `fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}`;
+      toast.appendChild(icon);
+      toast.appendChild(document.createTextNode(' ' + message));
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('show');
+        setTimeout(() => {
+          toast.classList.remove('show');
+          setTimeout(() => document.body.removeChild(toast), 300);
+        }, 3000);
+      }, 100);
+    }
+
+    /* ── Init ── */
+    // astro:page-load fires on first load AND after every ClientRouter navigation,
+    // replacing DOMContentLoaded which only fires once per hard page load.
+    document.addEventListener('astro:page-load', () => {
+      checkFavoriteStatus();
+      const btn = document.getElementById('load-more-btn');
+      if (btn) btn.addEventListener('click', loadMore);
+    });
+  })();
 </script>
 
 <style>
@@ -124,12 +329,19 @@ try {
     margin-bottom: var(--spacing-xs);
   }
 
+  /* Explicit 3-col desktop, 2-col tablet, 1-col mobile */
   .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: var(--spacing-lg);
     padding: var(--spacing-lg) 0;
     min-height: 400px;
+  }
+
+  .load-more-wrapper {
+    display: flex;
+    justify-content: center;
+    padding: var(--spacing-xl) 0 var(--spacing-2xl);
   }
 
   .empty-state,
@@ -165,12 +377,19 @@ try {
     margin-bottom: var(--spacing-lg);
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 1024px) {
+    .card-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 640px) {
     .page-header h1 {
       font-size: 1.875rem;
     }
 
     .card-grid {
+      grid-template-columns: 1fr;
       gap: var(--spacing-md);
     }
   }

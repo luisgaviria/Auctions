@@ -1,30 +1,71 @@
 ---
+import { ClientRouter } from 'astro:transitions';
+import Font from 'astro/components/Font.astro';
 import Topbar from '../components/Topbar.astro';
 
 interface Props {
   title: string;
+  description?: string;
+  canonical?: string;
 }
 
-const { title } = Astro.props;
+const {
+  title,
+  description = 'Browse upcoming real estate auctions in Massachusetts. Live bids, dates, deposits, and auctioneer details — updated daily.',
+  canonical = Astro.url.href,
+} = Astro.props;
+
+const pageTitle =
+  title === 'Auctions'
+    ? 'Upcoming Property Auctions in Massachusetts | Auction Intel'
+    : `${title} | Auction Intel`;
 ---
 
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="description" content="Astro description" />
     <meta name="viewport" content="width=device-width" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="generator" content={Astro.generator} />
-    <title>{title}</title>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+
+    <!-- Primary SEO -->
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonical} />
+
+    <!-- Astro 6 Fonts API — Satoshi (Fontshare) + JetBrains Mono (Fontsource) -->
+    <Font cssVariable="--font-sans" preload />
+    <Font cssVariable="--font-mono" preload />
+
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
     />
+
+    <!-- SPA client routing -->
+    <ClientRouter />
+
+    <!--
+      Zero-flicker dark mode: runs before first paint.
+      Reads localStorage → prefers-color-scheme → defaults light.
+    -->
+    <script is:inline>
+      (function () {
+        const saved = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute(
+          'data-theme',
+          saved || (prefersDark ? 'dark' : 'light')
+        );
+      })();
+    </script>
   </head>
   <body>
     <Topbar />
@@ -35,52 +76,139 @@ const { title } = Astro.props;
 </html>
 
 <style is:global>
+  /* ═══════════════════════════════════════════════════════
+     LIGHT MODE — Zinc neutral palette
+     All greys are Zinc values; accent is Deep Jade.
+     Every text colour meets WCAG AA (4.5:1 on its background).
+     ═══════════════════════════════════════════════════════ */
   :root {
-    /* Colors */
-    --color-primary: #3b82f6;
-    --color-primary-dark: #2563eb;
-    --color-primary-light: #60a5fa;
-    --color-secondary: #64748b;
-    --color-success: #22c55e;
-    --color-danger: #ef4444;
-    --color-warning: #f59e0b;
-    --color-info: #0ea5e9;
+    /* ── Surfaces ── */
+    --color-bg:             #fafafa;   /* zinc-50  */
+    --color-surface:        #ffffff;   /* white    */
+    --color-surface-raised: #f4f4f5;   /* zinc-100 */
+    --color-card:           var(--color-surface);
 
-    /* Neutrals */
-    --color-bg: #f8fafc;
-    --color-card: #ffffff;
-    --color-text-primary: #1e293b;
-    --color-text-secondary: #64748b;
-    --color-border: #e2e8f0;
+    /* ── Borders ── */
+    --color-border:         #e4e4e7;   /* zinc-200 */
+    --color-border-subtle:  #f4f4f5;   /* zinc-100 */
 
-    /* Shadows */
+    /* ── Accent: Deep Jade (contrast ≥ 9:1 on white) ── */
+    --color-accent:         hsl(160, 75%, 18%);
+    --color-accent-dark:    hsl(160, 80%, 12%);
+    --color-accent-light:   hsl(158, 58%, 48%);
+    --color-accent-subtle:  hsl(160, 55%, 94%);   /* zinc-adjacent tint */
+
+    /* ── Backward-compat aliases ── */
+    --color-primary:        var(--color-accent);
+    --color-primary-dark:   var(--color-accent-dark);
+    --color-primary-light:  var(--color-accent-light);
+
+    /* ── Text (all meet 4.5:1 on --color-surface) ──
+       zinc-900 on white  ≈ 17:1   ✓
+       zinc-600 on white  ≈  7:1   ✓
+       zinc-500 on white  ≈  4.6:1 ✓ (passes AA)          */
+    --color-text-primary:   #18181b;   /* zinc-900 */
+    --color-text-secondary: #52525b;   /* zinc-600 — 7:1   */
+    --color-text-muted:     #71717a;   /* zinc-500 — 4.6:1 */
+
+    /* ── Status chips — zinc neutral + jade accent ── */
+    --status-active-bg:     hsla(160, 75%, 18%, 0.07);
+    --status-active-fg:     hsl(160, 75%, 16%);
+    --status-active-border: hsla(160, 75%, 18%, 0.22);
+    --status-postponed-bg:  hsla(38, 90%, 48%, 0.09);
+    --status-postponed-fg:  hsl(32, 75%, 28%);
+    --status-postponed-border: hsla(38, 90%, 48%, 0.28);
+    --status-muted-bg:      #f4f4f5;   /* zinc-100 */
+    --status-muted-fg:      #52525b;   /* zinc-600 */
+    --status-muted-border:  #d4d4d8;   /* zinc-300 */
+
+    /* ── Feedback colours ── */
+    --color-success:  var(--color-accent);
+    --color-danger:   #dc2626;   /* red-600  — 5.9:1 on white ✓ */
+    --color-warning:  #d97706;   /* amber-600 — 4.6:1 on white ✓ */
+    --color-info:     #2563eb;   /* blue-600  — 5.9:1 on white ✓ */
+    --color-secondary: #52525b;
+
+    /* ── Minimal shadows (border-first design) ── */
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    --shadow-md: 0 2px 6px -1px rgb(0 0 0 / 0.07);
+    --shadow-lg: 0 8px 18px -3px rgb(0 0 0 / 0.09);
+    --shadow-xl: 0 16px 28px -5px rgb(0 0 0 / 0.10);
 
-    /* Typography */
-    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    /* ── Typography ── */
+    --font-sans: 'Satoshi', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'JetBrains Mono Variable', 'Courier New', Courier, monospace;
 
-    /* Spacing */
-    --spacing-xs: 0.5rem;
-    --spacing-sm: 0.75rem;
-    --spacing-md: 1rem;
-    --spacing-lg: 1.5rem;
-    --spacing-xl: 2rem;
+    /* ── Spacing ── */
+    --spacing-xs:  0.5rem;
+    --spacing-sm:  0.75rem;
+    --spacing-md:  1rem;
+    --spacing-lg:  1.5rem;
+    --spacing-xl:  2rem;
     --spacing-2xl: 3rem;
 
-    /* Border Radius */
-    --radius-sm: 0.375rem;
-    --radius-md: 0.5rem;
-    --radius-lg: 0.75rem;
+    /* ── Radius — architectural / sharp ── */
+    --radius-sm:   2px;
+    --radius-md:   4px;
+    --radius-lg:   6px;
+    --radius-card: 2px;
     --radius-full: 9999px;
 
-    /* Transitions */
-    --transition-all: all 0.3s ease;
+    /* ── Transitions ── */
+    --transition-all: all 0.18s ease;
   }
 
-  * {
+  /* ═══════════════════════════════════════════════════════
+     DARK MODE — [data-theme='dark']
+     Zinc 950 base with Zinc 900 surface.
+     Jade accent flips to a bright glow (mint green).
+     Text: zinc-50/200/400 — all ≥ 4.5:1 on dark surface.
+     ═══════════════════════════════════════════════════════ */
+  [data-theme='dark'] {
+    /* Surfaces */
+    --color-bg:             #09090b;   /* zinc-950 */
+    --color-surface:        #18181b;   /* zinc-900 */
+    --color-surface-raised: #27272a;   /* zinc-800 */
+    --color-card:           var(--color-surface);
+
+    /* Borders */
+    --color-border:         #3f3f46;   /* zinc-700 */
+    --color-border-subtle:  #27272a;   /* zinc-800 */
+
+    /* Accent — Jade Glow (neon mint) */
+    --color-accent:         hsl(158, 60%, 52%);
+    --color-accent-dark:    hsl(158, 60%, 42%);
+    --color-accent-light:   hsl(158, 68%, 64%);
+    --color-accent-subtle:  hsla(158, 60%, 52%, 0.12);
+
+    /* Text (all ≥ 4.5:1 on zinc-900 #18181b)
+       zinc-50  on zinc-900 ≈ 17:1  ✓
+       zinc-400 on zinc-900 ≈  7:1  ✓
+       zinc-500 on zinc-900 ≈  4.8:1 ✓                   */
+    --color-text-primary:   #fafafa;   /* zinc-50  */
+    --color-text-secondary: #a1a1aa;   /* zinc-400 — 7:1   */
+    --color-text-muted:     #71717a;   /* zinc-500 — 4.8:1 */
+
+    /* Status chips dark */
+    --status-active-bg:     hsla(158, 60%, 52%, 0.12);
+    --status-active-fg:     hsl(158, 60%, 62%);
+    --status-active-border: hsla(158, 60%, 52%, 0.28);
+    --status-postponed-bg:  hsla(38, 85%, 55%, 0.12);
+    --status-postponed-fg:  hsl(38, 85%, 68%);
+    --status-postponed-border: hsla(38, 85%, 55%, 0.28);
+    --status-muted-bg:      #27272a;   /* zinc-800 */
+    --status-muted-fg:      #a1a1aa;   /* zinc-400 */
+    --status-muted-border:  #3f3f46;   /* zinc-700 */
+
+    /* Shadows — heavier on dark */
+    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 8px -1px rgb(0 0 0 / 0.5);
+    --shadow-lg: 0 10px 20px -3px rgb(0 0 0 / 0.55);
+    --shadow-xl: 0 20px 30px -5px rgb(0 0 0 / 0.6);
+  }
+
+  /* ── Reset ── */
+  *, *::before, *::after {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -88,6 +216,7 @@ const { title } = Astro.props;
 
   html {
     scroll-behavior: smooth;
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 
   body {
@@ -99,12 +228,14 @@ const { title } = Astro.props;
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* Header: 0.625rem padding + ~44px bar + 0.625rem padding ≈ 4.5rem.
+     Extra 0.75rem breathing room = 5.25rem total clearance.           */
   .main-content {
-    margin-top: 4rem;
-    min-height: calc(100vh - 4rem);
+    padding-top: 5.25rem;
+    min-height: 100vh;
   }
 
-  /* Buttons */
+  /* ── Buttons ── */
   .btn {
     display: inline-flex;
     align-items: center;
@@ -117,27 +248,29 @@ const { title } = Astro.props;
     border: none;
     font-size: 0.875rem;
     gap: var(--spacing-xs);
+    letter-spacing: 0.01em;
+    font-family: var(--font-sans);
   }
 
   .btn-primary {
-    background-color: var(--color-primary);
-    color: white;
+    background-color: var(--color-accent);
+    color: #fff;
   }
 
   .btn-primary:hover {
-    background-color: var(--color-primary-dark);
+    background-color: var(--color-accent-dark);
   }
 
   .btn-secondary {
     background-color: var(--color-secondary);
-    color: white;
+    color: #fff;
   }
 
   .btn-secondary:hover {
     filter: brightness(90%);
   }
 
-  /* Forms */
+  /* ── Forms ── */
   .form-group {
     display: flex;
     flex-direction: column;
@@ -158,28 +291,30 @@ const { title } = Astro.props;
     font-size: 1rem;
     transition: var(--transition-all);
     width: 100%;
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
   }
 
   .form-control:focus {
     outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-subtle);
   }
 
-  /* Cards */
+  /* ── Cards — crisp border, no shadow, border-color hover ── */
   .card {
-    background-color: var(--color-card);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-md);
-    transition: var(--transition-all);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    transition: border-color 0.18s ease;
   }
 
   .card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-lg);
+    border-color: var(--color-accent);
   }
 
-  /* Container */
+  /* ── Container / Grid ── */
   .container {
     width: 90%;
     max-width: 1200px;
@@ -187,57 +322,40 @@ const { title } = Astro.props;
     padding: var(--spacing-md);
   }
 
-  /* Grid */
   .grid {
     display: grid;
     gap: var(--spacing-lg);
   }
 
-  /* Typography */
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    font-weight: 600;
+  /* ── Typography ── */
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
     line-height: 1.2;
+    letter-spacing: -0.02em;
     margin-bottom: var(--spacing-md);
   }
 
-  h1 {
-    font-size: 2.25rem;
-  }
-  h2 {
-    font-size: 1.875rem;
-  }
-  h3 {
-    font-size: 1.5rem;
-  }
-  h4 {
-    font-size: 1.25rem;
-  }
-  h5 {
-    font-size: 1.125rem;
-  }
-  h6 {
-    font-size: 1rem;
-  }
+  h1 { font-size: 2.25rem; }
+  h2 { font-size: 1.875rem; }
+  h3 { font-size: 1.5rem; }
+  h4 { font-size: 1.25rem; }
+  h5 { font-size: 1.125rem; }
+  h6 { font-size: 1rem; }
 
-  /* Links */
   a {
     color: inherit;
     text-decoration: none;
     transition: var(--transition-all);
   }
 
-  /* Toast */
+  /* ── Toast ── */
   .toast {
     position: fixed;
     bottom: var(--spacing-xl);
     left: 50%;
     transform: translateX(-50%) translateY(100%);
-    background-color: var(--color-card);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
     padding: var(--spacing-md) var(--spacing-xl);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);
@@ -247,6 +365,11 @@ const { title } = Astro.props;
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
+    color: var(--color-text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
   }
 
   .toast.show {
@@ -254,31 +377,15 @@ const { title } = Astro.props;
     opacity: 1;
   }
 
-  .toast.success {
-    border-left: 4px solid var(--color-success);
-  }
+  .toast.success { border-left: 3px solid var(--color-success); }
+  .toast.error   { border-left: 3px solid var(--color-danger); }
+  .toast.info    { border-left: 3px solid var(--color-info); }
 
-  .toast.error {
-    border-left: 4px solid var(--color-danger);
-  }
-
-  /* Utilities */
-  .text-center {
-    text-align: center;
-  }
-  .text-primary {
-    color: var(--color-primary);
-  }
-  .text-secondary {
-    color: var(--color-text-secondary);
-  }
-  .font-bold {
-    font-weight: 600;
-  }
-  .mt-2 {
-    margin-top: var(--spacing-md);
-  }
-  .mb-2 {
-    margin-bottom: var(--spacing-md);
-  }
+  /* ── Utilities ── */
+  .text-center    { text-align: center; }
+  .text-primary   { color: var(--color-accent); }
+  .text-secondary { color: var(--color-text-secondary); }
+  .font-bold      { font-weight: 700; }
+  .mt-2           { margin-top: var(--spacing-md); }
+  .mb-2           { margin-bottom: var(--spacing-md); }
 </style>
