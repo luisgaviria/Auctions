@@ -21,8 +21,8 @@ type FavoriteRequest struct {
 }
 
 type FavoritesResponse struct {
-	Message  string                `json:"message"`
-	Auctions []models.AuctionModel `json:"auctions"`
+	Message  string               `json:"message"`
+	Auctions []models.AuctionJSON `json:"auctions"`
 }
 
 var getUserIDFromEmail = `SELECT id FROM users WHERE email = $1`
@@ -98,16 +98,17 @@ func (s *FavoritesService) GetFavorites(email string) ([]byte, int, error) {
 		return nil, http.StatusInternalServerError, err
 	}
 	defer rows.Close()
-	auctions := make([]models.AuctionModel, 0)
+	auctions := make([]models.AuctionJSON, 0)
 	for rows.Next() {
 		var auction models.AuctionModel
 		err := rows.Scan(&auction.Id, &auction.Address, &auction.City, &auction.State,
 			&auction.Time, &auction.Logo, &auction.Status, &auction.Link, &auction.Date,
-			&auction.Deposit, &auction.Lat, &auction.Lng, &auction.Createdat)
+			&auction.Deposit, &auction.Lat, &auction.Lng, &auction.Createdat,
+			&auction.SiteName, &auction.UpdatedAt)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
-		auctions = append(auctions, auction)
+		auctions = append(auctions, auction.ToJSON())
 	}
 	response := FavoritesResponse{
 		Message:  "Successfully retrieved favorites",

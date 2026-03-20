@@ -10,6 +10,9 @@ func ScrapDean() []Auction {
 	url := "https://deanassociatesinc.com/auctions/"
 	c := colly.NewCollector()
 	priceRegex := regexp.MustCompile(`\$[\d,]+`)
+	// The Gatsby site renders date and time into the same cell without a
+	// separator, e.g. "Mar 23, 20263:00 PM". Split on the year boundary.
+	dateTimeRe := regexp.MustCompile(`(\w{3} \d+, \d{4})\s*(\d+:\d+ [AP]M)`)
 
 	auctions := make([]Auction, 0)
 
@@ -22,7 +25,13 @@ func ScrapDean() []Auction {
 					switch i {
 					case 0:
 						{
-							auction.Date = td.Text
+							raw := td.Text
+							if m := dateTimeRe.FindStringSubmatch(raw); len(m) == 3 {
+								auction.Date = m[1]
+								auction.Time = m[2]
+							} else {
+								auction.Date = raw
+							}
 						}
 					case 2:
 						{

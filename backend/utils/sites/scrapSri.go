@@ -34,8 +34,10 @@ func ScrapSri() []Auction {
 		address := strings.TrimSpace(tds.Eq(4).Text())
 		city := strings.TrimSpace(tds.Eq(5).Text())
 		state := strings.TrimSpace(tds.Eq(6).Text())
-		status := strings.TrimSpace(tds.Eq(8).Text())
-		deposit := strings.TrimSpace(tds.Eq(9).Text())
+		// Index 7 = status ("On Schedule", "Cancelled", etc.)
+		// Index 8 = deposit amount — confirmed from live page inspection
+		status := strings.TrimSpace(tds.Eq(7).Text())
+		deposit := strings.TrimSpace(tds.Eq(8).Text())
 
 		if strings.Contains(address, "FEATURED:") {
 			address = strings.ReplaceAll(address, "FEATURED:", "")

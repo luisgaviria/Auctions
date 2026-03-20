@@ -5,6 +5,7 @@ import (
 	"backendAuction/utils/cache"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -19,20 +20,33 @@ func NewAuctionsService(db *sql.DB) *AuctionsService {
 }
 
 type GetAuctionsResponse struct {
-	Message  string         `json:"message"`
-	Auctions []models.AuctionModel `json:"auctions"`
+	Message  string               `json:"message"`
+	Auctions []models.AuctionJSON `json:"auctions"`
 }
 
-var selectFromAuctionsTable = `SELECT * FROM auctions;`
+// selectFilteredAuctions excludes terminal/past statuses, drops past-dated rows,
+// and sorts upcoming auctions chronologically.
+var selectFilteredAuctions = `
+	SELECT * FROM auctions
+	WHERE LOWER(status) NOT IN (
+		'cancelled', 'sold', 'removed', 'canceled',
+		'sold back to mortgagee', 'back to mortgagee',
+		'past', '3rd party purchase', 'postponed'
+	)
+	AND (date >= CURRENT_DATE OR date IS NULL)
+	ORDER BY date ASC NULLS LAST, id ASC
+	LIMIT $1 OFFSET $2`
 
-func (s *AuctionsService) GetAuctions() ([]byte, int, error) {
-	if cached, found := cache.Cache.Get(cache.AuctionsKey); found {
+func (s *AuctionsService) GetAuctions(limit, offset int) ([]byte, int, error) {
+	cacheKey := fmt.Sprintf("auctions_%d_%d", limit, offset)
+	if cached, found := cache.Cache.Get(cacheKey); found {
 		if data, ok := cached.([]byte); ok {
 			return data, http.StatusOK, nil
 		}
 	}
-	auctions := make([]models.AuctionModel, 0)
-	rows, err := s.DB.Query(selectFromAuctionsTable)
+
+	auctions := make([]models.AuctionJSON, 0)
+	rows, err := s.DB.Query(selectFilteredAuctions, limit, offset)
 	if err != nil {
 		log.Printf("Database error: %v\n", err)
 		return nil, http.StatusInternalServerError, err
@@ -54,16 +68,19 @@ func (s *AuctionsService) GetAuctions() ([]byte, int, error) {
 			&auction.Lat,
 			&auction.Lng,
 			&auction.Createdat,
+			&auction.SiteName,
+			&auction.UpdatedAt,
 		); err != nil {
 			log.Printf("Error scanning auction: %v\n", err)
 			return nil, http.StatusInternalServerError, err
 		}
-		auctions = append(auctions, auction)
+		auctions = append(auctions, auction.ToJSON())
 	}
 	if err := rows.Err(); err != nil {
 		log.Printf("Error iterating rows: %v\n", err)
 		return nil, http.StatusInternalServerError, err
 	}
+
 	response := GetAuctionsResponse{
 		Message:  "Successfully fetched auctions",
 		Auctions: auctions,
@@ -73,6 +90,6 @@ func (s *AuctionsService) GetAuctions() ([]byte, int, error) {
 		log.Printf("Error marshaling response: %v\n", err)
 		return nil, http.StatusInternalServerError, err
 	}
-	cache.Cache.Set(cache.AuctionsKey, data, 5*time.Minute)
+	cache.Cache.Set(cacheKey, data, 5*time.Minute)
 	return data, http.StatusOK, nil
-} 
+}

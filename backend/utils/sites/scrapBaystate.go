@@ -1,15 +1,17 @@
 package sites
 
 import (
+	"context"
 	"encoding/json"
-	"log"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/go-rod/rod"
+	"github.com/PuerkitoBio/goquery"
 )
 
+// Record is the JSON shape embedded in Baystate's page <script> tag.
 type Record struct {
 	Date    string `json:"date"`
 	Address string `json:"address"`
@@ -21,6 +23,8 @@ type Record struct {
 	Logo    string `json:"logo,omitempty"`
 }
 
+// extractStatus pulls the status text out of Baystate's inline HTML markup
+// that appears inside date strings for cancelled/postponed auctions.
 func extractStatus(date string) string {
 	parts := strings.Split(date, "'>")
 	if len(parts) > 1 {
@@ -32,71 +36,82 @@ func extractStatus(date string) string {
 	return ""
 }
 
+// cleanDate strips any inline HTML status markup and reformats the date to YYYY-MM-DD.
 func cleanDate(date string) string {
 	parts := strings.Split(date, " <s")
 	if len(parts) > 0 {
 		date = parts[0]
 	}
 	date = strings.ReplaceAll(date, "at", "@")
-	parsedDate, err := time.Parse("Jan 2, 2006 @ 3:04PM", date) // Adjust format based on the actual date
+	parsedDate, err := time.Parse("Jan 2, 2006 @ 3:04PM", date)
 	if err == nil {
 		return parsedDate.Format("2006-01-02")
 	}
-	return date // Return the original string if parsing fails
+	return date
 }
 
-func ScrapBaystate() []Auction {
+// ScrapBaystate fetches baystateauction.com via Cloudflare Browser Rendering,
+// extracts the embedded JSON auction data from the page <script> tag, and
+// returns a slice of Auction structs.
+func ScrapBaystate(ctx context.Context) ([]Auction, error) {
 	const logo = "/baystate.webp"
 	const link = "https://www.baystateauction.com/auctions"
-	page := rod.New().MustConnect().MustPage("https://www.baystateauction.com/auctions/state/ma")
-	page.MustWaitStable()
-	scriptWithScripts := page.MustElement("#main > div.row.main > script")
+	const targetURL = "https://www.baystateauction.com/auctions/state/ma"
 
-	jsText := scriptWithScripts.MustText()
-	jsText = "[" + strings.TrimSpace(strings.SplitN(jsText, "[", 2)[1])
-	jsText = strings.ReplaceAll(jsText, "\n", "")
-	jsText = strings.ReplaceAll(jsText, "\t", "")
-	jsText = regexp.MustCompile(`\s{2,}`).ReplaceAllString(jsText, " ") // Replace multiple spaces with one
-	jsText = strings.Replace(jsText, "},]", "}]", -1)                   // Replace the trailing comma
-
-	// Parse the cleaned string into JSON
-	var data []Record
-	err := json.Unmarshal([]byte(jsText), &data)
-
+	html, err := CFetch(ctx, targetURL)
 	if err != nil {
-		log.Fatalf("Error parsing JSON: %v", err)
+		return nil, fmt.Errorf("baystate: cfetch: %w", err)
 	}
 
-	var filteredData []Auction
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		return nil, fmt.Errorf("baystate: parse html: %w", err)
+	}
+
+	scriptText := doc.Find("#main > div.row.main > script").Text()
+	if scriptText == "" {
+		return nil, fmt.Errorf("baystate: script tag not found — selector may have changed")
+	}
+
+	// The script tag contains:  var auctions = [ {...}, {...} ];
+	// We split at the first "[" to isolate the JSON array.
+	parts := strings.SplitN(scriptText, "[", 2)
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("baystate: could not find JSON array in script tag")
+	}
+	jsText := "[" + strings.TrimSpace(parts[1])
+	jsText = strings.ReplaceAll(jsText, "\n", "")
+	jsText = strings.ReplaceAll(jsText, "\t", "")
+	jsText = regexp.MustCompile(`\s{2,}`).ReplaceAllString(jsText, " ")
+	jsText = strings.ReplaceAll(jsText, "},]", "}]") // strip trailing comma
+
+	var data []Record
+	if err := json.Unmarshal([]byte(jsText), &data); err != nil {
+		// Log and return error instead of log.Fatalf, which would kill the process.
+		return nil, fmt.Errorf("baystate: parse json: %w", err)
+	}
+
+	auctions := make([]Auction, 0, len(data))
 	for _, record := range data {
-		// Extract status from the date string
 		if strings.Contains(record.Date, "IS CANCELLED") || strings.Contains(record.Date, "Postponed") {
 			record.Status = extractStatus(record.Date)
 		} else {
 			record.Status = "On Schedule"
 		}
-
-		// Clean the date and reformat it
 		record.Date = cleanDate(record.Date)
 
-		// Add additional fields
-		record.Link = link
-		record.Logo = logo
-
-		// Add to the filtered list
-
-		auction := Auction{
-			Url:     record.Link,
-			Logo:    record.Logo,
-			Street:  record.Address,
-			City:    record.City,
-			Date:    record.Date,
-			Time:    time.Now().String(),
-			Status:  record.Status,
-			Deposit: record.Deposit,
-		}
-		filteredData = append(filteredData, auction)
+		auctions = append(auctions, Auction{
+			SiteName: "baystate",
+			Url:      link,
+			Logo:     logo,
+			Street:   record.Address,
+			City:     record.City,
+			Date:     record.Date,
+			Time:     time.Now().Format("15:04"),
+			Status:   record.Status,
+			Deposit:  record.Deposit,
+		})
 	}
 
-	return filteredData
-} // add pagination here
+	return auctions, nil
+}
