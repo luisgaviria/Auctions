@@ -44,10 +44,58 @@ const pageTitle =
     <Font cssVariable="--font-sans" preload />
     <Font cssVariable="--font-mono" preload />
 
+    <!-- Early connection to FA CDN — saves DNS + TLS round-trips -->
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com" />
+
+    <!-- Preload the two FA woff2 subsets so they download in parallel with the CSS
+         instead of chaining after it (saves ~594 ms on the critical path) -->
     <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/webfonts/fa-solid-900.woff2"
+      crossorigin
     />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/webfonts/fa-regular-400.woff2"
+      crossorigin
+    />
+
+    <!-- Font Awesome — async (non-render-blocking).
+         The preload trick: load as "style" triggers download without blocking render;
+         onload swaps rel to "stylesheet" to apply it. noscript covers JS-off. -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      />
+    </noscript>
+
+    <!-- Prevent icon flicker while FA loads async: hide .fa* elements until the
+         stylesheet arrives, then fade them in. Runs inline before first paint. -->
+    <style is:inline>
+      .fas, .far, .fab { opacity: 0; transition: opacity 0.15s ease; }
+    </style>
+    <script is:inline>
+      document.addEventListener('load', function onFaLoad(e) {
+        if (e.target && e.target.href && e.target.href.includes('font-awesome')) {
+          document.querySelectorAll('.fas,.far,.fab').forEach(function(el) {
+            el.style.opacity = '';
+          });
+          document.removeEventListener('load', onFaLoad, true);
+        }
+      }, true);
+    </script>
 
     <!-- SPA client routing -->
     <ClientRouter />
