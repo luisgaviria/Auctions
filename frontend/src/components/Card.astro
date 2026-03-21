@@ -9,20 +9,16 @@ interface Props {
   state: string;
   status: string;
   deposit: string;
-  logo: string;
+  siteName: string;
+  logo?: string;
 }
 
-const { id, link, date, time: auctionTime, address, city, state, status, deposit, logo } =
+const { id, link, date, time: auctionTime, address, city, state, status, deposit, siteName, logo } =
   Astro.props;
 
-// Convert "Apr 22, 2026" → "2026-04-22" for schema startDate
 function toISODate(str: string): string {
   if (!str) return '';
-  try {
-    return new Date(str).toISOString().split('T')[0];
-  } catch {
-    return '';
-  }
+  try { return new Date(str).toISOString().split('T')[0]; } catch { return ''; }
 }
 
 function statusCategory(s: string): 'active' | 'postponed' | 'muted' {
@@ -30,6 +26,14 @@ function statusCategory(s: string): 'active' | 'postponed' | 'muted' {
   if (lower.includes('postponed')) return 'postponed';
   if (!s || lower === 'date tbd' || lower === 'tbd') return 'muted';
   return 'active';
+}
+
+function formatSiteName(s: string): string {
+  if (!s) return '';
+  return s.replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(/[\s_-]+/)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
 }
 
 const schema = {
@@ -49,59 +53,64 @@ const schema = {
       addressCountry: 'US',
     },
   },
-  organizer: { '@type': 'Organization', logo: logo || undefined },
+  organizer: { '@type': 'Organization', name: formatSiteName(siteName) || undefined },
   eventStatus: 'https://schema.org/EventScheduled',
   eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
   url: link || undefined,
 };
 
-// Escape </script> sequences to prevent early tag closure
 const schemaJson = JSON.stringify(schema).replace(/</g, '\\u003c');
-
 const statusCat = statusCategory(status);
 const displayStatus = status || 'On Schedule';
+const displaySite = formatSiteName(siteName);
 ---
 
 <a
   href={link || '#'}
   target="_blank"
   rel="noopener noreferrer"
-  class="card auction-card"
+  class="auction-card"
   aria-label={`View auction: ${address}`}
 >
-  <div class="card-body">
+  <!-- Spotlight overlay — position driven by --mouse-x/--mouse-y via JS -->
+  <div class="card-spotlight" aria-hidden="true"></div>
 
-    <!-- Row 1: Status pill + auctioneer logo -->
-    <div class="card-top">
-      <span class="status-pill" data-status={statusCat}>{displayStatus}</span>
-      {logo && <img src={logo} alt="" class="auctioneer-logo" loading="lazy" aria-hidden="true" />}
+  <div class="card-inner">
+
+    <!-- Header: status dot + auctioneer -->
+    <div class="card-header">
+      <div class="status-indicator" data-status={statusCat}>
+        <span class="status-dot"></span>
+        <span class="status-text">{displayStatus}</span>
+      </div>
+      {displaySite && <span class="auctioneer-label">{displaySite}</span>}
     </div>
 
-    <!-- Row 2: Street address -->
-    <h3 class="property-address">{address || 'Address not available'}</h3>
+    <!-- Address block -->
+    <div class="card-address-block">
+      <h3 class="property-address">{address || 'Address not available'}</h3>
+      {city && state && <p class="location-line">{city}, {state}</p>}
+    </div>
 
-    <!-- Row 3: City / State -->
-    {city && state && <p class="location-line">{city}, {state}</p>}
-
-    <!-- Row 4: Terminal data block -->
-    <div class="terminal-block">
-      <div class="terminal-col">
-        <span class="terminal-label">Date</span>
-        <span class="terminal-value">{date || '—'}</span>
+    <!-- Data row: value above label -->
+    <div class="card-data-row">
+      <div class="data-cell">
+        <span class="data-value">{date || '—'}</span>
+        <span class="data-label">Date</span>
       </div>
-      <div class="terminal-col">
-        <span class="terminal-label">Time</span>
+      <div class="data-cell">
         {auctionTime
-          ? <span class="terminal-value">{auctionTime}</span>
-          : <span class="terminal-value terminal-value--tbd">TBD</span>}
+          ? <span class="data-value">{auctionTime}</span>
+          : <span class="data-value data-value--tbd">TBD</span>}
+        <span class="data-label">Time</span>
       </div>
-      <div class="terminal-col">
-        <span class="terminal-label">Deposit</span>
-        <span class="terminal-value">{deposit || '—'}</span>
+      <div class="data-cell">
+        <span class="data-value">{deposit || '—'}</span>
+        <span class="data-label">Deposit</span>
       </div>
     </div>
 
-    <!-- Footer: favorite button -->
+    <!-- Footer -->
     <div class="card-footer">
       <button
         class="favorite-btn"
@@ -121,98 +130,141 @@ const displayStatus = status || 'On Schedule';
 
 <script type="application/ld+json" set:html={schemaJson} />
 
+<!-- Mouse-follow spotlight — runs once per page, handles all cards -->
+<script>
+  if (!(window as any).__auctionCardSpotlightInit) {
+    (window as any).__auctionCardSpotlightInit = true;
+    document.addEventListener('mousemove', (e) => {
+      const card = (e.target as Element).closest('.auction-card') as HTMLElement | null;
+      if (!card) return;
+      const r = card.getBoundingClientRect();
+      card.style.setProperty('--mouse-x', `${e.clientX - r.left}px`);
+      card.style.setProperty('--mouse-y', `${e.clientY - r.top}px`);
+    });
+  }
+</script>
+
 <style is:global>
-  /* ── Card shell ── */
+  /* ═══════════════════════════════════════════════
+     Auction Card — Vercel-style
+     ═══════════════════════════════════════════════ */
+
   .auction-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     height: 100%;
+    border-radius: 12px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
     text-decoration: none;
     color: inherit;
-    cursor: pointer;
-    /* Override .card hover (no translate, just border color) */
-    transition: border-color 0.2s ease;
+    overflow: hidden;
+    transition: border-color 0.2s ease, transform 0.2s ease;
   }
 
-  .auction-card .card-body {
-    padding: var(--spacing-lg);
+  .auction-card:hover {
+    border-color: var(--color-accent);
+    transform: translateY(-2px);
+  }
+
+  /* Spotlight element kept in HTML but hidden — no background glow */
+  .auction-card .card-spotlight { display: none; }
+
+  .auction-card .card-inner {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-sm);
     flex: 1;
+    padding: 1.375rem 1.375rem 1.125rem;
+    gap: 1rem;
   }
 
-  /* ── Row 1: status + logo ── */
-  .auction-card .card-top {
+  /* ── Header ── */
+  .auction-card .card-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 2px;
+    gap: 0.75rem;
   }
 
-  /* Status pill — subtle, no glow */
-  .auction-card .status-pill {
+  .auction-card .status-indicator {
     display: inline-flex;
     align-items: center;
-    padding: 2px 8px;
-    border-radius: var(--radius-full);
-    font-size: 0.65rem;
+    gap: 6px;
+  }
+
+  /* Colored dot */
+  .auction-card .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--color-text-muted);
+  }
+
+  .auction-card .status-indicator[data-status='active'] .status-dot {
+    background: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 20%, transparent);
+    animation: card-dot-pulse 2.4s ease-in-out infinite;
+  }
+
+  .auction-card .status-indicator[data-status='postponed'] .status-dot {
+    background: var(--color-warning);
+  }
+
+  @keyframes card-dot-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 40%, transparent); }
+    50%       { box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-accent) 0%, transparent); }
+  }
+
+  .auction-card .status-text {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+  }
+
+  .auction-card .status-indicator[data-status='active'] .status-text {
+    color: var(--color-accent);
+  }
+
+  .auction-card .status-indicator[data-status='postponed'] .status-text {
+    color: var(--color-warning);
+  }
+
+  /* Auctioneer name */
+  .auction-card .auctioneer-label {
+    font-family: var(--font-mono);
+    font-size: 0.675rem;
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    border: 1px solid var(--status-active-border);
-    background-color: var(--status-active-bg);
-    color: var(--status-active-fg);
+    color: var(--color-text-muted);
     white-space: nowrap;
     overflow: hidden;
-    max-width: 160px;
     text-overflow: ellipsis;
-    font-family: var(--font-mono);
-  }
-
-  .auction-card .status-pill[data-status='active'] {
-    background-color: var(--status-active-bg);
-    color: var(--status-active-fg);
-    border-color: var(--status-active-border);
-  }
-
-  .auction-card .status-pill[data-status='postponed'] {
-    background-color: var(--status-postponed-bg);
-    color: var(--status-postponed-fg);
-    border-color: var(--status-postponed-border);
-  }
-
-  .auction-card .status-pill[data-status='muted'] {
-    background-color: var(--status-muted-bg);
-    color: var(--status-muted-fg);
-    border-color: var(--status-muted-border);
-  }
-
-  /* Auctioneer logo — small, grayscale */
-  .auction-card .auctioneer-logo {
-    width: 28px;
-    height: 28px;
-    border-radius: var(--radius-sm);
-    object-fit: contain;
-    border: 1px solid var(--color-border);
-    background: var(--color-surface-raised);
-    padding: 2px;
+    max-width: 100px;
     flex-shrink: 0;
-    filter: grayscale(100%);
-    opacity: 0.7;
-    transition: filter 0.2s ease, opacity 0.2s ease;
   }
 
-  .auction-card:hover .auctioneer-logo {
-    filter: grayscale(0%);
-    opacity: 1;
+  /* ── Address block ── */
+  .auction-card .card-address-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    flex: 1;
   }
 
-  /* ── Row 2: Address ── */
   .auction-card .property-address {
-    font-size: 0.9375rem;
+    font-size: 1.0625rem;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
     line-height: 1.3;
     color: var(--color-text-primary);
     margin: 0;
@@ -222,74 +274,80 @@ const displayStatus = status || 'On Schedule';
     overflow: hidden;
   }
 
-  /* ── Row 3: Location ── */
   .auction-card .location-line {
-    font-size: 0.775rem;
+    font-size: 14px;
     color: var(--color-text-muted);
-    letter-spacing: 0.02em;
-    margin: 0;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
+    font-weight: 700;
     font-family: var(--font-mono);
+    margin: 0;
   }
 
-  /* ── Row 4: Terminal block ── */
-  .auction-card .terminal-block {
+  /* ── Data row ── */
+  .auction-card .card-data-row {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    margin-top: auto;
-    padding-top: var(--spacing-sm);
-    border-top: 2px solid var(--color-accent);
+    border-top: 1px solid var(--color-border);
+    padding-top: 1rem;
+    gap: 0;
+    transition: border-color 0.2s ease;
   }
 
-  .auction-card .terminal-col {
+  .auction-card:hover .card-data-row {
+    border-top-color: var(--color-accent);
+  }
+
+  .auction-card .data-cell {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 0 var(--spacing-sm);
+    gap: 5px;
+    padding-right: 1rem;
     border-right: 1px solid var(--color-border);
   }
 
-  .auction-card .terminal-col:first-child { padding-left: 0; }
-  .auction-card .terminal-col:last-child  { border-right: none; }
+  .auction-card .data-cell:first-child { padding-left: 0; }
+  .auction-card .data-cell:last-child  { border-right: none; padding-right: 0; padding-left: 1rem; }
+  .auction-card .data-cell:not(:first-child):not(:last-child) { padding-left: 1rem; }
 
-  .auction-card .terminal-label {
+  .auction-card .data-value {
     font-family: var(--font-mono);
-    font-size: 0.6rem;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--color-accent);
-    line-height: 1;
-  }
-
-  .auction-card .terminal-value {
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
+    font-size: 0.8125rem;
     font-weight: 600;
     color: var(--color-text-primary);
-    line-height: 1.2;
+    line-height: 1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .auction-card .terminal-value--tbd {
+  .auction-card .data-value--tbd {
     color: var(--color-text-muted);
     font-weight: 400;
     font-style: italic;
   }
 
-  /* ── Footer: favorite button ── */
+  .auction-card .data-label {
+    font-family: var(--font-mono);
+    font-size: 0.675rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    line-height: 1;
+  }
+
+  /* ── Footer ── */
   .auction-card .card-footer {
     display: flex;
     justify-content: flex-end;
-    padding-top: var(--spacing-xs);
+    padding-top: 0.25rem;
   }
 
   .auction-card .favorite-btn {
     width: 1.75rem;
     height: 1.75rem;
-    border-radius: var(--radius-sm);
+    border-radius: 6px;
     background: transparent;
     border: 1px solid var(--color-border);
     color: var(--color-text-muted);
@@ -298,14 +356,14 @@ const displayStatus = status || 'On Schedule';
     align-items: center;
     justify-content: center;
     font-size: 0.75rem;
-    transition: var(--transition-all);
+    transition: all 0.15s ease;
     position: relative;
     flex-shrink: 0;
   }
 
   .auction-card .favorite-btn:hover {
     background: var(--color-danger);
-    color: white;
+    color: #fff;
     border-color: var(--color-danger);
   }
 
@@ -314,9 +372,7 @@ const displayStatus = status || 'On Schedule';
     border-color: var(--color-danger);
   }
 
-  .auction-card .favorite-btn[data-loading='true'] i {
-    opacity: 0;
-  }
+  .auction-card .favorite-btn[data-loading='true'] i { opacity: 0; }
 
   .auction-card .fav-spinner {
     display: none;
@@ -324,16 +380,12 @@ const displayStatus = status || 'On Schedule';
     width: 0.875rem;
     height: 0.875rem;
     border: 1.5px solid var(--color-border);
-    border-radius: var(--radius-full);
+    border-radius: 50%;
     border-top-color: var(--color-accent);
     animation: fav-spin 0.6s linear infinite;
   }
 
-  .auction-card .favorite-btn[data-loading='true'] .fav-spinner {
-    display: block;
-  }
+  .auction-card .favorite-btn[data-loading='true'] .fav-spinner { display: block; }
 
-  @keyframes fav-spin {
-    to { transform: rotate(360deg); }
-  }
+  @keyframes fav-spin { to { transform: rotate(360deg); } }
 </style>
