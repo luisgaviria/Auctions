@@ -1,5 +1,4 @@
 ---
-import { ClientRouter } from 'astro:transitions';
 import Font from 'astro/components/Font.astro';
 import Topbar from '../components/Topbar.astro';
 
@@ -97,8 +96,6 @@ const pageTitle =
       }, true);
     </script>
 
-    <!-- SPA client routing -->
-    <ClientRouter />
 
     <!--
       Zero-flicker dark mode: runs before first paint.

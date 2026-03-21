@@ -307,9 +307,7 @@ const hasMore = auctions.length === LIMIT;
     }
 
     /* ── Init ── */
-    // astro:page-load fires on first load AND after every ClientRouter navigation,
-    // replacing DOMContentLoaded which only fires once per hard page load.
-    document.addEventListener('astro:page-load', () => {
+    document.addEventListener('DOMContentLoaded', () => {
       checkFavoriteStatus();
       const btn = document.getElementById('load-more-btn');
       if (btn) btn.addEventListener('click', loadMore);

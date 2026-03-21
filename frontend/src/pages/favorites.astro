@@ -187,7 +187,7 @@ const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
     }
   });
 
-  document.addEventListener('astro:page-load', loadFavorites);
+  document.addEventListener('DOMContentLoaded', loadFavorites);
 </script>
 
 <style>
