@@ -80,23 +80,6 @@ const pageTitle =
       />
     </noscript>
 
-    <!-- Prevent icon flicker while FA loads async: hide .fa* elements until the
-         stylesheet arrives, then fade them in. Runs inline before first paint. -->
-    <style is:inline>
-      .fas, .far, .fab { opacity: 0; transition: opacity 0.15s ease; }
-    </style>
-    <script is:inline>
-      document.addEventListener('load', function onFaLoad(e) {
-        if (e.target && e.target.href && e.target.href.includes('font-awesome')) {
-          document.querySelectorAll('.fas,.far,.fab').forEach(function(el) {
-            el.style.opacity = '';
-          });
-          document.removeEventListener('load', onFaLoad, true);
-        }
-      }, true);
-    </script>
-
-
     <!--
       Zero-flicker dark mode: runs before first paint.
       Reads localStorage → prefers-color-scheme → defaults light.
