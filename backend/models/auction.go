@@ -39,6 +39,8 @@ type AuctionJSON struct {
 	Link     string `json:"link"`
 	Date     string `json:"date"`
 	Deposit  string `json:"deposit"`
+	Lat      string `json:"lat"`
+	Lng      string `json:"lng"`
 }
 
 // ToJSON converts a scanned AuctionModel into an API-safe AuctionJSON.
@@ -57,7 +59,9 @@ func (a AuctionModel) ToJSON() AuctionJSON {
 		SiteName: a.SiteName,
 		Status:   a.Status,
 		Link:     a.Link,
-		Date:     date,
-		Deposit:  a.Deposit,
+		Date:    date,
+		Deposit: a.Deposit,
+		Lat:     a.Lat,
+		Lng:     a.Lng,
 	}
 } 
