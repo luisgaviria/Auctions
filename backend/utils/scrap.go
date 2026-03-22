@@ -163,7 +163,12 @@ func aiRescue(ctx context.Context, siteName, fallbackURL string) []sites.Auction
 		return nil
 	}
 
-	auctions, err := sites.RescueWithAI(ctx, html)
+	// Use a dedicated 3-minute context for the AI call so the main scraper's
+	// overall deadline cannot cancel it prematurely.
+	aiCtx, aiCancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer aiCancel()
+
+	auctions, err := sites.RescueWithAI(aiCtx, html)
 	if err != nil {
 		log.Printf("[AI_HEAL] gemini failed for site=%s: %v", siteName, err)
 		return nil
@@ -184,7 +189,7 @@ func aiRescueFetchHTML(ctx context.Context, siteName, url string) string {
 	log.Printf("[AI_HEAL] plain http.Get url=%s", url)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err == nil {
-		client := &http.Client{Timeout: 20 * time.Second}
+		client := &http.Client{Timeout: 60 * time.Second}
 		resp, err := client.Do(req)
 		if err == nil {
 			body, _ := io.ReadAll(resp.Body)
