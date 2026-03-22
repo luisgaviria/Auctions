@@ -1,7 +1,9 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import maplibregl from 'maplibre-gl';
-  import 'maplibre-gl/dist/maplibre-gl.css';
+  // `?url` tells Vite to copy the file to the build output and give us the hashed
+  // URL as a string — without injecting the CSS into the page automatically.
+  // We inject the <link> tag lazily in onMount so it never blocks the initial load.
+  import maplibreCssUrl from 'maplibre-gl/dist/maplibre-gl.css?url';
 
   export let auctions = [];
   export let apiUrl = '';
@@ -10,6 +12,8 @@
 
   let mapContainer;
   let map = null;
+  // Populated by the dynamic import inside onMount — null until first activation.
+  let maplibregl = null;
   // Each entry: { id, marker, lngLat, popup }
   let markers = [];
   let activePopup = null;
@@ -37,7 +41,7 @@
   }
 
   function renderMarkers(auctionList) {
-    if (!map) return;
+    if (!map || !maplibregl) return;
     clearMarkers();
 
     auctionList.filter(validCoord).forEach(auction => {
@@ -125,11 +129,34 @@
     }
   }
 
-  onMount(() => {
-    // Guard against HMR double-initialisation: onDestroy nulls map out,
-    // so if this fires again before the old instance is torn down we skip.
+  onMount(async () => {
+    // Guard against HMR double-initialisation.
     if (map) return;
 
+    // ── Lazy activation ────────────────────────────────────────────────────────
+    // Don't load the 286 KiB MapLibre library until the user opens map view.
+    // 'resizemap' is dispatched by setView() in index.astro after the container
+    // is made visible (display:flex).  We block here so MapLibre is never
+    // downloaded on a page load where the user stays in grid view.
+    await new Promise(resolve => {
+      mapContainer.addEventListener('resizemap', resolve, { once: true });
+    });
+
+    // ── Dynamic import (separate Vite chunk, only fetched on demand) ───────────
+    maplibregl = (await import('maplibre-gl')).default;
+
+    // ── Inject MapLibre CSS lazily ─────────────────────────────────────────────
+    // maplibreCssUrl is a Vite ?url import: the file is in the build output but
+    // the <link> tag is only added now, not on the initial page load.
+    if (!document.getElementById('maplibre-gl-css')) {
+      const link = document.createElement('link');
+      link.id   = 'maplibre-gl-css';
+      link.rel  = 'stylesheet';
+      link.href = maplibreCssUrl;
+      document.head.appendChild(link);
+    }
+
+    // ── Initialise map ─────────────────────────────────────────────────────────
     map = new maplibregl.Map({
       container: mapContainer,
       style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`,
@@ -155,9 +182,8 @@
         didFit = true;
       }
 
-      // After the initial fit animation settles, auto-search the visible viewport so
-      // the sidebar is populated immediately without requiring the user to move the map.
-      // Then register the user-movement tracker for all subsequent moves.
+      // After the initial fit animation settles, auto-search the visible viewport
+      // so the sidebar is populated immediately.  Then register the user-move tracker.
       function initialSearch() {
         const b = map.getBounds();
         currentBounds = {
@@ -184,22 +210,16 @@
       }
     });
 
-    // 'resizemap' is dispatched by setView() in index.astro after the split panel
-    // becomes visible.  MapLibre's canvas is 0×0 while the container is display:none,
-    // so map.resize() must be called once the container has real dimensions.
-    mapContainer.addEventListener('resizemap', () => {
-      map.resize();
-    });
+    // Subsequent resizemap events (user toggles back to map view after closing it).
+    mapContainer.addEventListener('resizemap', () => map && map.resize());
 
     // 'flytomarker' is dispatched by the sidebar card click handler in index.astro.
     mapContainer.addEventListener('flytomarker', (e) => {
       const entry = markers.find(m => m.id === e.detail.id);
       if (!entry) return;
 
-      // Close any open popup first.
       if (activePopup) { activePopup.remove(); activePopup = null; }
 
-      // Fly to the marker, then open its popup once the animation settles.
       map.flyTo({ center: entry.lngLat, zoom: 15, duration: 700 });
       map.once('moveend', () => {
         entry.popup.setLngLat(entry.lngLat).addTo(map);

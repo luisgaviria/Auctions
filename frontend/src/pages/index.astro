@@ -107,7 +107,7 @@ const hasMore = auctions.length === LIMIT;
 
               {/* Map panel */}
               <div class="split-right" id="split-right">
-                <Map client:load auctions={auctions} apiUrl={apiUrl} />
+                <Map client:only="svelte" auctions={auctions} apiUrl={apiUrl} />
               </div>
 
               {/* Mobile pull-up drawer */}
