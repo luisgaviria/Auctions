@@ -97,8 +97,8 @@ HTML:
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(httpReq)
+	client := &http.Client{Timeout: 3 * time.Minute}
+  resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("gemini: http post: %w", err)
 	}
