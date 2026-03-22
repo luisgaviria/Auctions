@@ -1,8 +1,9 @@
 import { defineConfig, fontProviders } from 'astro/config';
 import react from '@astrojs/react';
+import svelte from '@astrojs/svelte';
 
 export default defineConfig({
-  integrations: [react()],
+  integrations: [react(), svelte()],
   vite: {
     envPrefix: 'VITE_',
   },

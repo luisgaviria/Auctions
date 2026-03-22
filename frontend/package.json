@@ -13,6 +13,7 @@
   "dependencies": {
     "@astrojs/check": "^0.9.8",
     "@astrojs/react": "^5.0.1",
+    "@astrojs/svelte": "^8.0.3",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
@@ -20,10 +21,12 @@
     "astro": "^6.0.8",
     "axios": "^1.9.0",
     "bootstrap": "^5.3.3",
+    "maplibre-gl": "^5.21.0",
     "react": "^18.3.1",
     "react-bootstrap": "^2.10.5",
     "react-dom": "^18.3.1",
     "react-helmet": "^6.1.0",
+    "svelte": "^5.54.1",
     "typescript": "^5.6.2"
   },
   "devDependencies": {

@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Card from '../components/Card.astro';
+import Map from '../components/Map.svelte';
 import axios, { AxiosError } from 'axios';
 
 const LIMIT = 20;
@@ -51,134 +52,110 @@ const hasMore = auctions.length === LIMIT;
           </div>
         ) : (
           <>
-            <div class="card-grid" id="auctions-grid">
-              {auctions.length === 0 ? (
-                <div class="empty-state">
-                  <i class="fas fa-search" />
-                  <h2>No auctions available</h2>
-                  <p>There are currently no auctions listed. Please check back later.</p>
-                </div>
-              ) : (
-                auctions.map((auction: any) => (
-                  <Card
-                    id={auction.id}
-                    link={auction.link}
-                    date={auction.date}
-                    time={auction.time}
-                    address={auction.address}
-                    city={auction.city}
-                    state={auction.state}
-                    status={auction.status}
-                    deposit={auction.deposit}
-                    siteName={auction.site_name}
-                  />
-                ))
-              )}
+            {/* ── Grid View ── */}
+            <div id="grid-view">
+              <div class="card-grid" id="auctions-grid">
+                {auctions.length === 0 ? (
+                  <div class="empty-state">
+                    <i class="fas fa-search" />
+                    <h2>No auctions available</h2>
+                    <p>There are currently no auctions listed. Please check back later.</p>
+                  </div>
+                ) : (
+                  auctions.map((auction: any) => (
+                    <Card
+                      id={auction.id}
+                      link={auction.link}
+                      date={auction.date}
+                      time={auction.time}
+                      address={auction.address}
+                      city={auction.city}
+                      state={auction.state}
+                      status={auction.status}
+                      deposit={auction.deposit}
+                      siteName={auction.site_name}
+                    />
+                  ))
+                )}
+              </div>
+              <div class="load-more-wrapper">
+                <button
+                  id="load-more-btn"
+                  class="btn btn-primary"
+                  style={hasMore ? '' : 'display:none'}
+                >
+                  Load More
+                </button>
+              </div>
             </div>
-            <div class="load-more-wrapper">
-              <button
-                id="load-more-btn"
-                class="btn btn-primary"
-                style={hasMore ? '' : 'display:none'}
-              >
-                Load More
-              </button>
+
+            {/* ── Map Split View ── */}
+            <div id="map-split" class="map-split" style="display:none">
+              {/* Desktop left panel */}
+              <div class="split-left" id="split-left">
+                <div class="split-card-list" id="map-card-list"></div>
+                <div class="split-load-more">
+                  <button
+                    id="map-load-more-btn"
+                    class="btn btn-primary"
+                    style={hasMore ? '' : 'display:none'}
+                  >
+                    Load More
+                  </button>
+                </div>
+              </div>
+
+              {/* Map panel */}
+              <div class="split-right" id="split-right">
+                <Map client:load auctions={auctions} apiUrl={apiUrl} />
+              </div>
+
+              {/* Mobile pull-up drawer */}
+              <div class="mobile-drawer" id="mobile-drawer" data-state="peek">
+                <button class="drawer-handle-area" id="drawer-toggle" aria-label="Toggle card list">
+                  <div class="drawer-handle"></div>
+                  <span class="drawer-label" id="drawer-label">Show listings</span>
+                </button>
+                <div class="drawer-body">
+                  <div class="drawer-card-list" id="drawer-card-list"></div>
+                  <div class="drawer-load-more">
+                    <button
+                      id="drawer-load-more-btn"
+                      class="btn btn-primary"
+                      style={hasMore ? '' : 'display:none'}
+                    >
+                      Load More
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </>
         )
       }
     </div>
   </div>
+
+  {/* Floating view toggle */}
+  <button id="view-toggle-btn" class="view-toggle-btn" aria-label="Toggle map view">
+    <i class="fas fa-map" id="toggle-icon"></i>
+    <span id="toggle-label">Show Map</span>
+  </button>
 </Layout>
 
-<script define:vars={{ apiUrl, initialCount: auctions.length, LIMIT }}>
+<script define:vars={{ apiUrl, initialAuctions: auctions, initialCount: auctions.length, LIMIT }}>
   (function () {
-    let offset = initialCount;
+    let allAuctions = [...initialAuctions];
+    let offset = initialAuctions.length;
     let loading = false;
-    let hasMore = initialCount === LIMIT;
+    let hasMore = initialAuctions.length === LIMIT;
+    let mapViewInitialised = false;
+    let isMapView = false;
+    // Tracks whichever auctions are currently shown on the map (bbox results or initial load).
+    // null means no bbox search has run yet; fall back to allAuctions in that case.
+    let currentMapAuctions = null;
 
-
-    /* ── Favorite button — event delegation covers initial + Load More cards ── */
-
-    
-    document.addEventListener('click', async (e) => {
-      const button = e.target.closest('.favorite-btn');
-      if (!button) return;
-
-      // Prevent the parent <a> card from navigating when heart is clicked
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (!localStorage.getItem('jwt_token')) {
-        window.location.href = '/login';
-        return;
-      }
-
-      if (button.dataset.loading === 'true') return;
-
-      const auctionId = parseInt(button.dataset.auctionId, 10);
-      if (isNaN(auctionId)) return;
-
-      const icon = button.querySelector('i');
-      const isFavorited = icon.classList.contains('fas');
-
-      try {
-        button.dataset.loading = 'true';
-        const endpoint = isFavorited ? 'remove' : 'add';
-        const response = await fetch(`${apiUrl}/favorites/${endpoint}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('jwt_token')}`,
-          },
-          body: JSON.stringify({ auction_id: auctionId }),
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          icon.classList.toggle('far');
-          icon.classList.toggle('fas');
-          button.setAttribute('aria-pressed', String(!isFavorited));
-          showToast(
-            isFavorited ? 'Removed from favorites' : 'Added to favorites',
-            isFavorited ? 'info' : 'success'
-          );
-        } else {
-          showToast('Error updating favorites', 'error');
-        }
-      } catch {
-        showToast('Network error occurred', 'error');
-      } finally {
-        button.dataset.loading = 'false';
-      }
-    });
-
-    /* ── Favorite status sync ── */
-    async function checkFavoriteStatus() {
-      if (!localStorage.getItem('jwt_token')) return;
-      try {
-        const response = await fetch(`${apiUrl}/favorites`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('jwt_token')}` },
-          credentials: 'include',
-        });
-        if (!response.ok) return;
-        const data = await response.json();
-        const favoriteIds = new Set((data.auctions || []).map((a) => a.id));
-        document.querySelectorAll('.favorite-btn').forEach((btn) => {
-          const id = parseInt(btn.dataset.auctionId, 10);
-          const icon = btn.querySelector('i');
-          if (favoriteIds.has(id)) {
-            icon.classList.replace('far', 'fas');
-          } else {
-            icon.classList.replace('fas', 'far');
-          }
-        });
-      } catch {
-        /* silently ignore — user may not be logged in */
-      }
-    }
-
-    /* ── Status category helper ── */
+    /* ── Status + formatter helpers ── */
     function getStatusCategory(s) {
       const lower = (s || '').toLowerCase();
       if (lower.includes('postponed')) return 'postponed';
@@ -186,7 +163,6 @@ const hasMore = auctions.length === LIMIT;
       return 'active';
     }
 
-    /* ── Site name formatter — mirrors Card.astro formatSiteName() ── */
     function formatSiteName(s) {
       if (!s) return '';
       return s.replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -195,30 +171,44 @@ const hasMore = auctions.length === LIMIT;
         .join(' ');
     }
 
-    /* ── Card HTML generator ── */
+    /* ── Card HTML ──
+     * In map view the anchor does NOT navigate — it fires 'flytomarker' so the
+     * map pans to the property. The original link is kept in data-link and is
+     * still accessible via the popup's "View Details" button.
+     *
+     * Go JSON tag  →  JS key
+     * "id"         →  auction.id
+     * "address"    →  auction.address
+     * "city"       →  auction.city
+     * "state"      →  auction.state
+     * "time"       →  auction.time
+     * "site_name"  →  auction.site_name
+     * "status"     →  auction.status
+     * "link"       →  auction.link
+     * "date"       →  auction.date
+     * "deposit"    →  auction.deposit
+     */
     function createCardHTML(auction) {
-      const date = auction.date || '—';
-      const time = auction.time || '';
+      const date    = auction.date    || '—';
+      const time    = auction.time    || '';
       const deposit = auction.deposit || '—';
       const address = auction.address || 'Address not available';
-      const status = auction.status || 'On Schedule';
-      const safeLink = (auction.link || '#').replace(/"/g, '&quot;');
+      const status  = auction.status  || 'On Schedule';
+      const safeLink    = (auction.link || '#').replace(/"/g, '&quot;');
       const safeAddress = address.replace(/"/g, '&quot;');
-      const statusCat = getStatusCategory(status);
-      const siteName = formatSiteName(auction.site_name || '');
-
-      const locationLine =
-        auction.city && auction.state
-          ? `<p class="location-line">${auction.city}, ${auction.state}</p>`
-          : '';
-
+      const statusCat   = getStatusCategory(status);
+      const siteName    = formatSiteName(auction.site_name || '');
+      const locationLine = auction.city && auction.state
+        ? `<p class="location-line">${auction.city}, ${auction.state}</p>` : '';
       const auctioneerHtml = siteName
-        ? `<span class="auctioneer-label">${siteName}</span>`
-        : '';
+        ? `<span class="auctioneer-label">${siteName}</span>` : '';
 
       return `
-        <a href="${safeLink}" target="_blank" rel="noopener noreferrer"
-           class="auction-card" aria-label="View auction: ${safeAddress}">
+        <a href="#"
+           class="auction-card map-trigger-card"
+           data-auction-id="${auction.id}"
+           data-link="${safeLink}"
+           aria-label="Fly to auction: ${safeAddress}">
           <div class="card-spotlight" aria-hidden="true"></div>
           <div class="card-inner">
             <div class="card-header">
@@ -261,15 +251,190 @@ const hasMore = auctions.length === LIMIT;
         </a>`;
     }
 
+    /* ── Populate map-view card lists ── */
+    function populateMapCards(auctionList) {
+      console.log('Sidebar Data:', auctionList[0]);
+
+      const mapList    = document.getElementById('map-card-list');
+      const drawerList = document.getElementById('drawer-card-list');
+
+      // Verify the containers exist before doing anything.
+      console.log('Target Container:', mapList);
+      if (!mapList && !drawerList) return;
+
+      if (!auctionList || auctionList.length === 0) {
+        const emptyHTML = '<p class="sidebar-empty">No auctions found in this area.</p>';
+        if (mapList)    mapList.innerHTML    = emptyHTML;
+        if (drawerList) drawerList.innerHTML = emptyHTML;
+        return;
+      }
+
+      // Direct assignment — no requestAnimationFrame, no async gap.
+      const html = auctionList.map(createCardHTML).join('');
+
+      if (mapList) {
+        // Clear any previous content (including any stale spinner) completely.
+        mapList.innerHTML    = '';
+        mapList.innerHTML    = html;
+        // Force the container visible and reset scroll.
+        mapList.style.display  = 'flex';
+        mapList.style.opacity  = '1';
+        mapList.scrollTop      = 0;
+        if (mapList.parentElement) mapList.parentElement.scrollTop = 0;
+      }
+      if (drawerList) {
+        drawerList.innerHTML   = '';
+        drawerList.innerHTML   = html;
+        drawerList.style.display = 'flex';
+        drawerList.style.opacity = '1';
+        drawerList.scrollTop   = 0;
+      }
+    }
+
+    function appendMapCards(newAuctions) {
+      const html = newAuctions.map(createCardHTML).join('');
+      const mapList = document.getElementById('map-card-list');
+      const drawerList = document.getElementById('drawer-card-list');
+      [mapList, drawerList].forEach(container => {
+        if (!container) return;
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        while (temp.firstElementChild) container.appendChild(temp.firstElementChild);
+      });
+    }
+
+    /* ── View toggle ── */
+    function setView(showMap) {
+      isMapView = showMap;
+      const gridView = document.getElementById('grid-view');
+      const mapSplit = document.getElementById('map-split');
+      const icon = document.getElementById('toggle-icon');
+      const label = document.getElementById('toggle-label');
+
+      if (showMap) {
+        gridView.style.display  = 'none';
+        mapSplit.style.display  = 'flex';
+        icon.className = 'fas fa-th';
+        label.textContent = 'Grid View';
+
+        // MapLibre calculates its canvas size when the container is visible.
+        // Because the map was rendered inside display:none, it has no dimensions
+        // until we trigger map.resize(). A short delay lets the browser complete
+        // the layout pass before the event fires.
+        setTimeout(() => {
+          document.querySelector('.map-container')?.dispatchEvent(new CustomEvent('resizemap'));
+        }, 50);
+
+        // Populate the sidebar. If initialSearch() has already run (map was loaded
+        // while display:none and bbox results were received), use those so the card
+        // IDs match the markers already on the map.  Fall back to the initial 20
+        // SSR auctions only when no bbox search has completed yet.
+        populateMapCards(currentMapAuctions ?? allAuctions);
+
+        // checkFavoriteStatus updates heart icons after cards are rendered.
+        // It's async so it naturally runs after the rAF inside populateMapCards.
+        checkFavoriteStatus();
+        mapViewInitialised = true;
+
+        // Sync load-more button visibility.
+        const mapBtn = document.getElementById('map-load-more-btn');
+        const drawerBtn = document.getElementById('drawer-load-more-btn');
+        [mapBtn, drawerBtn].forEach(b => {
+          if (b) b.style.display = hasMore ? '' : 'none';
+        });
+      } else {
+        mapSplit.style.display  = 'none';
+        gridView.style.display  = '';
+        icon.className = 'fas fa-map';
+        label.textContent = 'Show Map';
+      }
+    }
+
+    /* ── Favourite handling ── */
+    document.addEventListener('click', async (e) => {
+      const button = e.target.closest('.favorite-btn');
+      if (!button) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!localStorage.getItem('jwt_token')) {
+        window.location.href = '/login';
+        return;
+      }
+      if (button.dataset.loading === 'true') return;
+
+      const auctionId = parseInt(button.dataset.auctionId, 10);
+      if (isNaN(auctionId)) return;
+
+      const icon = button.querySelector('i');
+      const isFavorited = icon.classList.contains('fas');
+
+      try {
+        button.dataset.loading = 'true';
+        const endpoint = isFavorited ? 'remove' : 'add';
+        const response = await fetch(`${apiUrl}/favorites/${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('jwt_token')}`,
+          },
+          body: JSON.stringify({ auction_id: auctionId }),
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          // Update all instances (grid + map panel + drawer)
+          document.querySelectorAll(`.favorite-btn[data-auction-id="${auctionId}"]`).forEach(btn => {
+            const i = btn.querySelector('i');
+            i.classList.toggle('far');
+            i.classList.toggle('fas');
+            btn.setAttribute('aria-pressed', String(!isFavorited));
+          });
+          showToast(
+            isFavorited ? 'Removed from favorites' : 'Added to favorites',
+            isFavorited ? 'info' : 'success'
+          );
+        } else {
+          showToast('Error updating favorites', 'error');
+        }
+      } catch {
+        showToast('Network error occurred', 'error');
+      } finally {
+        button.dataset.loading = 'false';
+      }
+    });
+
+    /* ── Favourite status sync ── */
+    async function checkFavoriteStatus() {
+      if (!localStorage.getItem('jwt_token')) return;
+      try {
+        const response = await fetch(`${apiUrl}/favorites`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('jwt_token')}` },
+          credentials: 'include',
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        const favoriteIds = new Set((data.auctions || []).map((a) => a.id));
+        document.querySelectorAll('.favorite-btn').forEach((btn) => {
+          const id = parseInt(btn.dataset.auctionId, 10);
+          const i = btn.querySelector('i');
+          if (favoriteIds.has(id)) {
+            i.classList.replace('far', 'fas');
+          } else {
+            i.classList.replace('fas', 'far');
+          }
+        });
+      } catch { /* silently ignore */ }
+    }
+
     /* ── Load More ── */
-    async function loadMore() {
+    async function loadMore(triggerBtn) {
       if (loading || !hasMore) return;
       loading = true;
 
-      const btn = document.getElementById('load-more-btn');
-      const origText = btn.textContent;
-      btn.textContent = 'Loading…';
-      btn.disabled = true;
+      const origText = triggerBtn.textContent;
+      triggerBtn.textContent = 'Loading…';
+      triggerBtn.disabled = true;
 
       try {
         const response = await fetch(`${apiUrl}/auctions?limit=${LIMIT}&offset=${offset}`);
@@ -277,18 +442,26 @@ const hasMore = auctions.length === LIMIT;
         const data = await response.json();
         const newAuctions = data.auctions || [];
 
+        // Append to grid
         const grid = document.getElementById('auctions-grid');
-        newAuctions.forEach((auction) => {
+        newAuctions.forEach(a => {
           const temp = document.createElement('div');
-          temp.innerHTML = createCardHTML(auction).trim();
+          temp.innerHTML = createCardHTML(a).trim();
           grid.appendChild(temp.firstElementChild);
         });
 
+        // Append to map panels if initialised
+        if (mapViewInitialised) appendMapCards(newAuctions);
+
+        allAuctions = [...allAuctions, ...newAuctions];
         offset += newAuctions.length;
 
         if (newAuctions.length < LIMIT) {
           hasMore = false;
-          btn.style.display = 'none';
+          ['load-more-btn', 'map-load-more-btn', 'drawer-load-more-btn'].forEach(id => {
+            const b = document.getElementById(id);
+            if (b) b.style.display = 'none';
+          });
         }
 
         await checkFavoriteStatus();
@@ -297,13 +470,36 @@ const hasMore = auctions.length === LIMIT;
       } finally {
         loading = false;
         if (hasMore) {
-          btn.textContent = origText;
-          btn.disabled = false;
+          triggerBtn.textContent = origText;
+          triggerBtn.disabled = false;
         }
       }
     }
 
-    /* ── Toast helper ── */
+    /* ── Mobile drawer ── */
+    function initDrawer() {
+      const drawer = document.getElementById('mobile-drawer');
+      const toggleBtn = document.getElementById('drawer-toggle');
+      const label = document.getElementById('drawer-label');
+      if (!drawer || !toggleBtn) return;
+
+      toggleBtn.addEventListener('click', () => {
+        const expanded = drawer.dataset.state === 'expanded';
+        drawer.dataset.state = expanded ? 'peek' : 'expanded';
+        label.textContent = expanded ? 'Show listings' : 'Hide listings';
+      });
+
+      // Swipe-up gesture
+      let touchStartY = 0;
+      drawer.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+      drawer.addEventListener('touchend', e => {
+        const delta = touchStartY - e.changedTouches[0].clientY;
+        if (delta > 40) { drawer.dataset.state = 'expanded'; label.textContent = 'Hide listings'; }
+        if (delta < -40) { drawer.dataset.state = 'peek'; label.textContent = 'Show listings'; }
+      }, { passive: true });
+    }
+
+    /* ── Toast ── */
     function showToast(message, type = 'info') {
       const toast = document.createElement('div');
       toast.className = `toast ${type}`;
@@ -325,13 +521,82 @@ const hasMore = auctions.length === LIMIT;
     /* ── Init ── */
     document.addEventListener('DOMContentLoaded', () => {
       checkFavoriteStatus();
-      const btn = document.getElementById('load-more-btn');
-      if (btn) btn.addEventListener('click', loadMore);
+
+      document.getElementById('load-more-btn')?.addEventListener('click', e => loadMore(e.currentTarget));
+      document.getElementById('map-load-more-btn')?.addEventListener('click', e => loadMore(e.currentTarget));
+      document.getElementById('drawer-load-more-btn')?.addEventListener('click', e => loadMore(e.currentTarget));
+
+      document.getElementById('view-toggle-btn')?.addEventListener('click', () => setView(!isMapView));
+
+      // Safety: if map view is already active on page load populate immediately.
+      if (isMapView) populateMapCards(allAuctions);
+
+      // Click-to-fly: sidebar card click → map flies to that marker + opens popup.
+      document.addEventListener('click', (e) => {
+        const card = e.target.closest('.map-trigger-card');
+        if (!card) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Don't intercept the favourite button inside the card.
+        if (e.target.closest('.favorite-btn')) return;
+
+        const id = parseInt(card.dataset.auctionId, 10);
+        if (isNaN(id)) return;
+
+        const mapEl = document.querySelector('.map-container');
+        if (mapEl) {
+          mapEl.dispatchEvent(new CustomEvent('flytomarker', {
+            bubbles: false,
+            detail: { id },
+          }));
+        }
+      });
+
+      // Marker click in Map.svelte → scroll matching sidebar card into view + highlight.
+      document.getElementById('split-right')?.addEventListener('markerclick', (e) => {
+        const id = e.detail?.id;
+        console.log('Interaction Target:', id);
+        if (!id) return;
+        // Handle both string and number IDs that may come from the data attribute vs JS.
+        const card = document.querySelector(
+          `.map-trigger-card[data-auction-id="${id}"], .map-trigger-card[data-auction-id='${id}']`
+        );
+        console.log('Card found for highlight:', !!card);
+        if (!card) return;
+        // Small delay ensures any layout shifts from the popup have settled before scroll.
+        setTimeout(() => {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 10);
+        card.classList.remove('is-active-highlight'); // reset if already animating
+        // Force a reflow so removing+re-adding the class restarts the animation.
+        void card.offsetWidth;
+        card.classList.add('is-active-highlight');
+        setTimeout(() => card.classList.remove('is-active-highlight'), 2000);
+      });
+
+      // Receive bbox search results from Map.svelte and refresh card panels.
+      document.getElementById('split-right')?.addEventListener('auctionresultschange', (e) => {
+        const newAuctions = e.detail?.auctions ?? [];
+        // Keep currentMapAuctions in sync so setView never overwrites these with allAuctions.
+        currentMapAuctions = newAuctions;
+        populateMapCards(newAuctions);
+        checkFavoriteStatus();
+
+        // Hide Load More — bbox searches return all matches, pagination doesn't apply.
+        ['map-load-more-btn', 'drawer-load-more-btn'].forEach(id => {
+          const b = document.getElementById(id);
+          if (b) b.style.display = 'none';
+        });
+      });
+
+      initDrawer();
     });
   })();
 </script>
 
 <style>
+  /* ── Page shell ── */
   .auctions-page {
     padding-top: var(--spacing-2xl);
   }
@@ -346,7 +611,7 @@ const hasMore = auctions.length === LIMIT;
     margin-bottom: var(--spacing-xs);
   }
 
-  /* Explicit 3-col desktop, 2-col tablet, 1-col mobile */
+  /* ── Grid view ── */
   .card-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -361,6 +626,165 @@ const hasMore = auctions.length === LIMIT;
     padding: var(--spacing-xl) 0 var(--spacing-2xl);
   }
 
+  /* ── Map split view ──
+   * Break entirely out of .container (width:90%) using viewport units.
+   * margin-left: calc(50% - 50vw) pulls the left edge to the viewport edge
+   * regardless of how wide .container is.  Fixed-px sidebar avoids the
+   * %-on-flex-item collapse that happens when the flex container has no
+   * explicit width resolved from its ancestor chain.
+   */
+  .map-split {
+    /* display is controlled exclusively by JS (setView).
+       Do NOT add display:flex here — it would override style="display:none"
+       because stylesheet !important beats a plain inline style. */
+    width: 100vw;
+    position: relative;
+    margin-left: calc(50% - 50vw);
+    height: calc(100vh - 80px);
+    gap: 0;
+    border-radius: 0;
+    overflow: hidden;
+    border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+    /* Stacking context: drawer (z-50) is confined; toggle btn (z-1000) floats above */
+    z-index: 1;
+  }
+
+  .split-left {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    width: 400px !important;
+    min-width: 400px !important;
+    flex: 0 0 400px !important;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    position: relative;
+    z-index: 50;
+    overflow: hidden;
+  }
+
+  .split-card-list {
+    display: flex !important;
+    flex-direction: column;
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    gap: var(--spacing-md);
+    overflow-y: auto;
+    padding: var(--spacing-md);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  .split-load-more {
+    height: 64px;
+    padding: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-top: 1px solid var(--color-border);
+    flex-shrink: 0;
+    background: var(--color-surface);
+  }
+
+  /* ── Sidebar loading / empty states ── */
+  .sidebar-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: var(--spacing-xl) var(--spacing-md);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  .sidebar-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid var(--color-border);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: sidebar-spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes sidebar-spin { to { transform: rotate(360deg); } }
+
+  .sidebar-empty {
+    padding: var(--spacing-xl) var(--spacing-md);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    text-align: center;
+  }
+
+  .split-right {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    z-index: 10;
+  }
+
+  /* ── Mobile drawer (hidden on desktop) ── */
+  .mobile-drawer {
+    display: none;
+  }
+
+  /* ── Floating toggle button ── */
+  .view-toggle-btn {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--color-text-primary);
+
+    background: rgba(250, 250, 250, 0.72);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.06);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    white-space: nowrap;
+  }
+
+  :global([data-theme='dark']) .view-toggle-btn {
+    background: rgba(9, 9, 11, 0.72);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  .view-toggle-btn:hover {
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.08);
+    border-color: var(--color-accent);
+  }
+
+  .view-toggle-btn i {
+    font-size: 0.875rem;
+    color: var(--color-accent);
+  }
+
+  /* ── States / empty / error ── */
   .empty-state,
   .error-state {
     grid-column: 1 / -1;
@@ -394,9 +818,107 @@ const hasMore = auctions.length === LIMIT;
     margin-bottom: var(--spacing-lg);
   }
 
+  /* ── Tablet ── */
   @media (max-width: 1024px) {
     .card-grid {
       grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  /* ── Mobile ── */
+  @media (max-width: 768px) {
+    .map-split {
+      height: calc(100vh - 80px);
+      margin: 0 calc(-1 * var(--spacing-md));
+      border-radius: 0;
+      border-left: none;
+      border-right: none;
+      position: relative;
+    }
+
+    /* Hide desktop left panel on mobile */
+    .split-left {
+      display: none;
+    }
+
+    /* Map takes full width */
+    .split-right {
+      width: 100%;
+    }
+
+    /* Pull-up drawer */
+    .mobile-drawer {
+      display: flex;
+      flex-direction: column;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: calc(100% - 60px);
+      background: var(--color-surface);
+      border-radius: 16px 16px 0 0;
+      border-top: 1px solid var(--color-border);
+      box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
+      transform: translateY(calc(100% - 64px));
+      transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+      z-index: 50;
+      overflow: hidden;
+    }
+
+    .mobile-drawer[data-state='expanded'] {
+      transform: translateY(0);
+    }
+
+    .drawer-handle-area {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 1rem 12px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      width: 100%;
+      color: var(--color-text-muted);
+    }
+
+    .drawer-handle {
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--color-border);
+    }
+
+    .drawer-label {
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+    }
+
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-md);
+      padding: 0 var(--spacing-md) var(--spacing-md);
+      scrollbar-width: thin;
+    }
+
+    .drawer-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-md);
+    }
+
+    .drawer-load-more {
+      display: flex;
+      justify-content: center;
+      padding: var(--spacing-sm) 0 var(--spacing-md);
     }
   }
 
@@ -409,5 +931,65 @@ const hasMore = auctions.length === LIMIT;
       grid-template-columns: 1fr;
       gap: var(--spacing-md);
     }
+
+    .view-toggle-btn {
+      bottom: 1.25rem;
+    }
+  }
+</style>
+
+<!--
+  Sidebar card overrides MUST be global: the .auction-card elements are injected via
+  innerHTML (JS) and never receive Astro's scoped data attribute, so scoped selectors
+  such as ".split-card-list .auction-card[data-astro-cid-xxx]" never match them.
+-->
+<style is:global>
+  /* Ensure the sidebar panel has an opaque background so map tiles don't bleed through. */
+  .split-left {
+    background-color: var(--color-surface) !important;
+  }
+
+  /* Each injected card must size to its own content, not try to fill the sidebar height. */
+  .split-card-list .auction-card {
+    display: block !important;
+    height: auto !important;
+    min-height: 180px !important;
+    margin-bottom: 1rem;
+  }
+
+  /* card-inner's global rule is flex:1 (flex-basis:0), which collapses to 0px without a
+     definite parent height.  Restore it to a flex column that sizes to content instead. */
+  .split-card-list .card-inner {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+    min-height: 180px !important;
+    background: var(--color-surface) !important;
+    color: var(--color-text-primary) !important;
+  }
+
+  /* Address block and data row: force visible in case flex or opacity rules hide them. */
+  .split-card-list .card-address-block,
+  .split-card-list .card-data-row {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  /* ── Marker-click highlight ──
+   * Applied for 2 s when a map pin is clicked. The pulse starts from the accent
+   * border and fades outward so the user's eye is drawn to the matching card.
+   */
+  .is-active-highlight {
+    border: 2px solid var(--color-primary) !important;
+    animation: card-highlight-pulse 0.7s ease-out forwards;
+    position: relative;
+    z-index: 100;
+  }
+
+  @keyframes card-highlight-pulse {
+    0%   { box-shadow: 0 0 0 0   color-mix(in srgb, var(--color-accent) 45%, transparent); }
+    60%  { box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-accent) 15%, transparent); }
+    100% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--color-accent)  0%, transparent); }
   }
 </style>
