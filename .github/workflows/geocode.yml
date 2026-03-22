@@ -1,11 +1,9 @@
 name: Geocode Auctions
 
 on:
-  # Run automatically 30 minutes after the daily scrape finishes
-  # (scrape runs at 12:00 UTC, geocode at 12:30 UTC)
   schedule:
-    - cron: '30 12 * * *'
-  workflow_dispatch:   # manual trigger from Actions tab
+    - cron: "30 12 * * *"
+  workflow_dispatch:
 
 jobs:
   geocode:
@@ -14,8 +12,8 @@ jobs:
     timeout-minutes: 15
 
     env:
-      DATABASE_URL:      ${{ secrets.DATABASE_URL }}
-      MAPTILER_API_KEY:  ${{ secrets.MAPTILER_API_KEY }}
+      DATABASE_URL: "${{ secrets.DATABASE_URL }}"
+      MAPTILER_API_KEY: ${{ secrets.MAPTILER_API_KEY }}
       ENV: PROD
 
     steps:
@@ -25,8 +23,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: "1.22"
           cache-dependency-path: backend/go.sum
+
+      # ✅ Force IPv4 to resolve Supabase connection issues
+      - name: Fix IPv6 Network Unreachable
+        run: sudo sh -c 'echo "precedence ::ffff:0:0/96  100" >> /etc/gai.conf'
 
       - name: Install dependencies
         working-directory: backend
