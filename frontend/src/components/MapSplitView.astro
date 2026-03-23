@@ -1,12 +1,10 @@
 ---
-import Map from './Map.svelte';
-
 interface Props {
   auctions: any[];
   hasMore: boolean;
   apiUrl: string;
 }
-const { auctions, hasMore, apiUrl } = Astro.props;
+const { auctions: _auctions, hasMore, apiUrl: _apiUrl } = Astro.props;
 ---
 
 <div id="map-split" class="map-split" style="display:none">
@@ -24,9 +22,9 @@ const { auctions, hasMore, apiUrl } = Astro.props;
     </div>
   </div>
 
-  {/* Map panel */}
+  {/* Map panel — mounted lazily by map-view.ts on first toggle */}
   <div class="split-right" id="split-right">
-    <Map client:only="svelte" auctions={auctions} apiUrl={apiUrl} />
+    <div id="map-mount" style="width:100%;height:100%"></div>
   </div>
 
   {/* Mobile pull-up drawer */}

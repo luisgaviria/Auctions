@@ -4,6 +4,11 @@ import svelte from '@astrojs/svelte';
 
 export default defineConfig({
   integrations: [react(), svelte()],
+  build: {
+    // Inline all CSS into <style> tags in the HTML, eliminating the two
+    // separate CSS requests (~3.2 KiB + ~3.4 KiB) from the critical path.
+    inlineStylesheets: 'always',
+  },
   vite: {
     envPrefix: 'VITE_',
   },

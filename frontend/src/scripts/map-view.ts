@@ -38,7 +38,32 @@ export function appendMapCards(newAuctions: any[]): void {
     });
 }
 
-export function setView(showMap: boolean): void {
+// ── Lazy map mount ─────────────────────────────────────────────────────────────
+// Map.svelte + Svelte runtime (~19 KiB) are NOT included in the initial bundle.
+// They are fetched only when the user opens map view for the first time.
+let mapMounted = false;
+
+async function ensureMapMounted(): Promise<void> {
+  if (mapMounted) return;
+  mapMounted = true;
+
+  const target = document.getElementById('map-mount');
+  if (!target) return;
+
+  // Fetch both in parallel — Svelte runtime and the component chunk.
+  const [{ mount }, { default: MapSvelte }] = await Promise.all([
+    import('svelte'),
+    import('../components/Map.svelte') as Promise<{ default: any }>,
+  ]);
+
+  mount(MapSvelte, {
+    target,
+    props: { auctions: state.allAuctions, apiUrl: state.apiUrl },
+  });
+}
+
+// ── View toggle ────────────────────────────────────────────────────────────────
+export async function setView(showMap: boolean): Promise<void> {
   state.isMapView = showMap;
   const gridView = document.getElementById('grid-view');
   const mapSplit = document.getElementById('map-split');
@@ -51,10 +76,6 @@ export function setView(showMap: boolean): void {
     if (icon)     icon.className  = 'fas fa-th';
     if (label)    label.textContent = 'Grid View';
 
-    setTimeout(() => {
-      document.querySelector('.map-container')?.dispatchEvent(new CustomEvent('resizemap'));
-    }, 50);
-
     populateMapCards(state.currentMapAuctions ?? state.allAuctions);
     checkFavoriteStatus();
     state.mapViewInitialised = true;
@@ -64,6 +85,14 @@ export function setView(showMap: boolean): void {
     [mapBtn, drawerBtn].forEach(b => {
       if (b) b.style.display = state.hasMore ? '' : 'none';
     });
+
+    // Mount the Svelte component (no-op after first call), then signal the
+    // map canvas to resize. The 50 ms delay gives Svelte's onMount time to
+    // register the resizemap event listener before we fire it.
+    await ensureMapMounted();
+    setTimeout(() => {
+      document.querySelector('.map-container')?.dispatchEvent(new CustomEvent('resizemap'));
+    }, 50);
   } else {
     if (mapSplit) mapSplit.style.display = 'none';
     if (gridView) gridView.style.display = '';
