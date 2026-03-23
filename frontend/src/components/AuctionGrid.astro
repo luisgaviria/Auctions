@@ -1,0 +1,97 @@
+---
+import Card from './Card.astro';
+
+interface Props {
+  auctions: any[];
+  hasMore: boolean;
+}
+const { auctions, hasMore } = Astro.props;
+---
+
+<div id="grid-view">
+  <div class="card-grid" id="auctions-grid">
+    {auctions.length === 0 ? (
+      <div class="empty-state">
+        <i class="fas fa-search" />
+        <h2>No auctions available</h2>
+        <p>There are currently no auctions listed. Please check back later.</p>
+      </div>
+    ) : (
+      auctions.map((auction: any) => (
+        <Card
+          id={auction.id}
+          link={auction.link}
+          date={auction.date}
+          time={auction.time}
+          address={auction.address}
+          city={auction.city}
+          state={auction.state}
+          status={auction.status}
+          deposit={auction.deposit}
+          siteName={auction.site_name}
+        />
+      ))
+    )}
+  </div>
+  <div class="load-more-wrapper">
+    <button
+      id="load-more-btn"
+      class="btn btn-primary"
+      style={hasMore ? '' : 'display:none'}
+    >
+      Load More
+    </button>
+  </div>
+</div>
+
+<style>
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-lg);
+    padding: var(--spacing-lg) 0;
+    min-height: 400px;
+  }
+
+  .load-more-wrapper {
+    display: flex;
+    justify-content: center;
+    padding: var(--spacing-xl) 0 var(--spacing-2xl);
+  }
+
+  .empty-state {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: var(--spacing-2xl);
+    gap: var(--spacing-md);
+  }
+
+  .empty-state i {
+    font-size: 3rem;
+    color: var(--color-text-secondary);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .empty-state h2 {
+    font-size: 1.5rem;
+    color: var(--color-text-primary);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .empty-state p {
+    color: var(--color-text-secondary);
+    max-width: 400px;
+  }
+
+  @media (max-width: 1024px) {
+    .card-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 640px) {
+    .card-grid { grid-template-columns: 1fr; gap: var(--spacing-md); }
+  }
+</style>

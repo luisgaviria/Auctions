@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/badge/MapLibre-212121?style=flat-square&logo=maplibre&logoColor=white" />
 </div>
 
-<h1 align="center">Auction Intel</h1>
+<h1 align="center">Auction & Company</h1>
 <p align="center">
   <strong>Massachusetts Real Estate Auction Aggregator</strong><br />
   Automated Daily Scraping • Spatial Mapping • AI Data Recovery

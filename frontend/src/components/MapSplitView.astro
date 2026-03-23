@@ -1,0 +1,276 @@
+---
+import Map from './Map.svelte';
+
+interface Props {
+  auctions: any[];
+  hasMore: boolean;
+  apiUrl: string;
+}
+const { auctions, hasMore, apiUrl } = Astro.props;
+---
+
+<div id="map-split" class="map-split" style="display:none">
+  {/* Desktop left panel */}
+  <div class="split-left" id="split-left">
+    <div class="split-card-list" id="map-card-list"></div>
+    <div class="split-load-more">
+      <button
+        id="map-load-more-btn"
+        class="btn btn-primary"
+        style={hasMore ? '' : 'display:none'}
+      >
+        Load More
+      </button>
+    </div>
+  </div>
+
+  {/* Map panel */}
+  <div class="split-right" id="split-right">
+    <Map client:only="svelte" auctions={auctions} apiUrl={apiUrl} />
+  </div>
+
+  {/* Mobile pull-up drawer */}
+  <div class="mobile-drawer" id="mobile-drawer" data-state="peek">
+    <button class="drawer-handle-area" id="drawer-toggle" aria-label="Toggle card list">
+      <div class="drawer-handle"></div>
+      <span class="drawer-label" id="drawer-label">Show listings</span>
+    </button>
+    <div class="drawer-body">
+      <div class="drawer-card-list" id="drawer-card-list"></div>
+      <div class="drawer-load-more">
+        <button
+          id="drawer-load-more-btn"
+          class="btn btn-primary"
+          style={hasMore ? '' : 'display:none'}
+        >
+          Load More
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .map-split {
+    width: 100vw;
+    position: relative;
+    margin-left: calc(50% - 50vw);
+    height: calc(100vh - 80px);
+    gap: 0;
+    border-radius: 0;
+    overflow: hidden;
+    border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+    z-index: 1;
+  }
+
+  .split-left {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 400px;
+    min-width: 400px;
+    flex: 0 0 400px;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    position: relative;
+    z-index: 50;
+    overflow: hidden;
+  }
+
+  .split-card-list {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+    gap: var(--spacing-md);
+    overflow-y: auto;
+    padding: var(--spacing-md);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  .split-load-more {
+    height: 64px;
+    padding: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-top: 1px solid var(--color-border);
+    flex-shrink: 0;
+    background: var(--color-surface);
+  }
+
+  .sidebar-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: var(--spacing-xl) var(--spacing-md);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  .sidebar-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid var(--color-border);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: sidebar-spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes sidebar-spin { to { transform: rotate(360deg); } }
+
+  .sidebar-empty {
+    padding: var(--spacing-xl) var(--spacing-md);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    text-align: center;
+  }
+
+  .split-right {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    z-index: 10;
+  }
+
+  .mobile-drawer { display: none; }
+
+  @media (max-width: 768px) {
+    .map-split {
+      height: calc(100vh - 80px);
+      margin: 0 calc(-1 * var(--spacing-md));
+      border-left: none;
+      border-right: none;
+    }
+
+    .split-left { display: none; }
+    .split-right { width: 100%; }
+
+    .mobile-drawer {
+      display: flex;
+      flex-direction: column;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: calc(100% - 60px);
+      background: var(--color-surface);
+      border-radius: 16px 16px 0 0;
+      border-top: 1px solid var(--color-border);
+      box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
+      transform: translateY(calc(100% - 64px));
+      transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+      z-index: 50;
+      overflow: hidden;
+    }
+
+    .mobile-drawer[data-state='expanded'] { transform: translateY(0); }
+
+    .drawer-handle-area {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 1rem 12px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      width: 100%;
+      color: var(--color-text-muted);
+    }
+
+    .drawer-handle {
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--color-border);
+    }
+
+    .drawer-label {
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+    }
+
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-md);
+      padding: 0 var(--spacing-md) var(--spacing-md);
+      scrollbar-width: thin;
+    }
+
+    .drawer-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-md);
+    }
+
+    .drawer-load-more {
+      display: flex;
+      justify-content: center;
+      padding: var(--spacing-sm) 0 var(--spacing-md);
+    }
+  }
+</style>
+
+<style is:global>
+  .split-left {
+    background-color: var(--color-surface) !important;
+  }
+
+  .split-card-list .auction-card {
+    display: block !important;
+    height: auto !important;
+    min-height: 180px !important;
+    margin-bottom: 1rem;
+  }
+
+  .split-card-list .card-inner {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+    min-height: 180px !important;
+    background: var(--color-surface) !important;
+    color: var(--color-text-primary) !important;
+  }
+
+  .split-card-list .card-address-block,
+  .split-card-list .card-data-row {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  .is-active-highlight {
+    border: 2px solid var(--color-primary) !important;
+    animation: card-highlight-pulse 0.7s ease-out forwards;
+    position: relative;
+    z-index: 100;
+  }
+
+  @keyframes card-highlight-pulse {
+    0%   { box-shadow: 0 0 0 0   color-mix(in srgb, var(--color-accent) 45%, transparent); }
+    60%  { box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-accent) 15%, transparent); }
+    100% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--color-accent)  0%, transparent); }
+  }
+</style>

@@ -1,0 +1,55 @@
+---
+---
+
+<button id="view-toggle-btn" class="view-toggle-btn" aria-label="Toggle map view">
+  <i class="fas fa-map" id="toggle-icon"></i>
+  <span id="toggle-label">Show Map</span>
+</button>
+
+<style>
+  .view-toggle-btn {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--color-text-primary);
+    background: rgba(250, 250, 250, 0.72);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.06);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    white-space: nowrap;
+  }
+
+  :global([data-theme='dark']) .view-toggle-btn {
+    background: rgba(9, 9, 11, 0.72);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  .view-toggle-btn:hover {
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.08);
+    border-color: var(--color-accent);
+  }
+
+  .view-toggle-btn i {
+    font-size: 0.875rem;
+    color: var(--color-accent);
+  }
+
+  @media (max-width: 640px) {
+    .view-toggle-btn { bottom: 1.25rem; }
+  }
+</style>
