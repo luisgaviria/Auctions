@@ -7,20 +7,21 @@ function getApiUrl(): string {
 }
 
 function createFavoriteCardHTML(auction: any): string {
-  const date     = auction.date    || '—';
-  const time     = auction.time    || '';
-  const deposit  = auction.deposit || '—';
-  const address  = auction.address || 'Address not available';
-  const status   = auction.status  || 'On Schedule';
-  const safeLink    = (auction.link || '#').replace(/"/g, '&quot;');
+  const date = auction.date || '—';
+  const time = auction.time || '';
+  const deposit = auction.deposit || '—';
+  const address = auction.address || 'Address not available';
+  const status = auction.status || 'On Schedule';
+  const safeLink = (auction.link || '#').replace(/"/g, '&quot;');
   const safeAddress = address.replace(/"/g, '&quot;');
-  const statusCat   = getStatusCategory(status);
-  const siteName    = formatSiteName(auction.site_name || '');
+  const statusCat = getStatusCategory(status);
+  const siteName = formatSiteName(auction.site_name || '');
 
-  const locationLine = auction.city && auction.state
-    ? `<p class="location-line">${auction.city}, ${auction.state}</p>` : '';
-  const auctioneerHtml = siteName
-    ? `<span class="auctioneer-label">${siteName}</span>` : '';
+  const locationLine =
+    auction.city && auction.state
+      ? `<p class="location-line">${auction.city}, ${auction.state}</p>`
+      : '';
+  const auctioneerHtml = siteName ? `<span class="auctioneer-label">${siteName}</span>` : '';
 
   return `
     <a href="${safeLink}" target="_blank" rel="noopener noreferrer"
@@ -35,7 +36,7 @@ function createFavoriteCardHTML(auction: any): string {
           ${auctioneerHtml}
         </div>
         <div class="card-address-block">
-          <h3 class="property-address">${address}</h3>
+          <div class="property-address">${address}</div>
           ${locationLine}
         </div>
         <div class="card-data-row">
