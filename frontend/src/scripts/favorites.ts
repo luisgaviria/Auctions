@@ -13,12 +13,12 @@ export async function checkFavoriteStatus(): Promise<void> {
     const favoriteIds = new Set<number>((data.auctions || []).map((a: any) => a.id));
     document.querySelectorAll<HTMLElement>('.favorite-btn').forEach(btn => {
       const id = parseInt(btn.dataset.auctionId ?? '', 10);
-      const i = btn.querySelector('i');
-      if (!i) return;
+      const useEl = btn.querySelector('use');
+      if (!useEl) return;
       if (favoriteIds.has(id)) {
-        i.classList.replace('far', 'fas');
+        useEl.setAttribute('href', '#icon-heart');
       } else {
-        i.classList.replace('fas', 'far');
+        useEl.setAttribute('href', '#icon-heart-o');
       }
     });
   } catch { /* silently ignore */ }
@@ -40,9 +40,9 @@ export function initFavoritesClickHandler(): void {
     const auctionId = parseInt(button.dataset.auctionId ?? '', 10);
     if (isNaN(auctionId)) return;
 
-    const icon = button.querySelector('i');
-    if (!icon) return;
-    const isFavorited = icon.classList.contains('fas');
+    const useEl = button.querySelector('use');
+    if (!useEl) return;
+    const isFavorited = useEl.getAttribute('href') === '#icon-heart';
 
     try {
       button.dataset.loading = 'true';
@@ -58,10 +58,9 @@ export function initFavoritesClickHandler(): void {
       });
       if (response.ok) {
         document.querySelectorAll(`.favorite-btn[data-auction-id="${auctionId}"]`).forEach(btn => {
-          const i = btn.querySelector('i');
-          if (!i) return;
-          i.classList.toggle('far');
-          i.classList.toggle('fas');
+          const u = btn.querySelector('use');
+          if (!u) return;
+          u.setAttribute('href', isFavorited ? '#icon-heart-o' : '#icon-heart');
           btn.setAttribute('aria-pressed', String(!isFavorited));
         });
         showToast(isFavorited ? 'Removed from favorites' : 'Added to favorites', isFavorited ? 'info' : 'success');

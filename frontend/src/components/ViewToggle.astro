@@ -2,7 +2,7 @@
 ---
 
 <button id="view-toggle-btn" class="view-toggle-btn" aria-label="Toggle map view">
-  <i class="fas fa-map" id="toggle-icon"></i>
+  <svg class="icon" id="toggle-icon" aria-hidden="true"><use id="toggle-use" href="#icon-map"></use></svg>
   <span id="toggle-label">Show Map</span>
 </button>
 
@@ -44,7 +44,7 @@
     border-color: var(--color-accent);
   }
 
-  .view-toggle-btn i {
+  .view-toggle-btn .icon {
     font-size: 0.875rem;
     color: var(--color-accent);
   }

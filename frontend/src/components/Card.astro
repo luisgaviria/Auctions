@@ -120,7 +120,7 @@ const displaySite = formatSiteName(siteName);
         aria-pressed="false"
         aria-label="Add to favorites"
       >
-        <i class="far fa-heart"></i>
+        <svg class="icon" aria-hidden="true"><use href="#icon-heart-o"></use></svg>
         <div class="fav-spinner"></div>
       </button>
     </div>
@@ -372,7 +372,7 @@ const displaySite = formatSiteName(siteName);
     border-color: var(--color-danger);
   }
 
-  .auction-card .favorite-btn[data-loading='true'] i { opacity: 0; }
+  .auction-card .favorite-btn[data-loading='true'] .icon { opacity: 0; }
 
   .auction-card .fav-spinner {
     display: none;

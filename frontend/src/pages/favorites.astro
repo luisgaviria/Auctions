@@ -17,7 +17,7 @@ const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 
       <div class="card-grid" id="favorites-container">
         <div class="empty-state">
-          <i class="far fa-heart"></i>
+          <svg class="icon" aria-hidden="true"><use href="#icon-heart-o"></use></svg>
           <h2>No favorites yet</h2>
           <p>Mark auctions as favorites to track them here.</p>
           <a href="/" class="btn btn-primary">Browse Auctions</a>
@@ -68,8 +68,8 @@ const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
     gap: var(--spacing-md);
   }
 
-  .empty-state i,
-  .error-state i {
+  .empty-state .icon,
+  .error-state .icon {
     font-size: 2.5rem;
     color: var(--color-text-muted);
   }

@@ -1,4 +1,17 @@
-import { getStatusCategory, formatSiteName } from './card';
+function getStatusCategory(s: string): 'active' | 'postponed' | 'muted' {
+  const lower = (s || '').toLowerCase();
+  if (lower.includes('postponed')) return 'postponed';
+  if (!s || lower === 'date tbd' || lower === 'tbd') return 'muted';
+  return 'active';
+}
+
+function formatSiteName(s: string): string {
+  if (!s) return '';
+  return s.replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(/[\s_-]+/)
+    .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
 
 /** Reads apiUrl from the hidden #favorites-config element. */
 function getApiUrl(): string {
@@ -60,7 +73,7 @@ function createFavoriteCardHTML(auction: any): string {
             title="Remove from favorites"
             aria-pressed="true"
             aria-label="Remove from favorites">
-            <i class="fas fa-heart"></i>
+            <svg class="icon" aria-hidden="true"><use href="#icon-heart"></use></svg>
             <div class="fav-spinner"></div>
           </button>
         </div>
@@ -97,7 +110,7 @@ async function loadFavorites(): Promise<void> {
     if (data.auctions.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
-          <i class="far fa-heart"></i>
+          <svg class="icon" aria-hidden="true"><use href="#icon-heart-o"></use></svg>
           <h2>No favorites yet</h2>
           <p>Mark auctions as favorites to track them here.</p>
           <a href="/" class="btn btn-primary">Browse Auctions</a>
@@ -109,7 +122,7 @@ async function loadFavorites(): Promise<void> {
   } catch {
     container.innerHTML = `
       <div class="error-state">
-        <i class="fas fa-exclamation-circle"></i>
+        <svg class="icon" aria-hidden="true"><use href="#icon-exclamation-circle"></use></svg>
         <h2>Error loading favorites</h2>
         <p>Something went wrong. Please try again.</p>
         <button onclick="window.location.reload()" class="btn btn-primary">Try Again</button>
@@ -138,8 +151,8 @@ function initFavoriteRemoval(): void {
     const auctionId = parseInt(button.dataset.auctionId ?? '', 10);
     if (isNaN(auctionId)) return;
 
-    const icon = button.querySelector('i');
-    const isFavorited = icon?.classList.contains('fas') ?? false;
+    const icon = button.querySelector('use');
+    const isFavorited = icon?.getAttribute('href') === '#icon-heart';
 
     try {
       button.dataset.loading = 'true';

@@ -33,8 +33,8 @@ var selectFilteredAuctions = `
 		'sold back to mortgagee', 'back to mortgagee',
 		'past', '3rd party purchase', 'postponed'
 	)
-	AND (date >= CURRENT_DATE OR date IS NULL)
-	ORDER BY date ASC NULLS LAST, id ASC
+	AND (date >= (CURRENT_DATE AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York')::date OR date IS NULL)
+	ORDER BY date ASC NULLS LAST, time ASC NULLS LAST
 	LIMIT $1 OFFSET $2`
 
 // selectAuctionsInBounds returns geocoded auctions within a lat/lng bounding box.
@@ -46,15 +46,17 @@ var selectAuctionsInBounds = `
 		'sold back to mortgagee', 'back to mortgagee',
 		'past', '3rd party purchase', 'postponed'
 	)
-	AND (date >= CURRENT_DATE OR date IS NULL)
+	AND (date >= (CURRENT_DATE AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York')::date OR date IS NULL)
 	AND lat != '0' AND lng != '0'
 	AND lat::float8 BETWEEN $1 AND $2
 	AND lng::float8 BETWEEN $3 AND $4
-	ORDER BY date ASC NULLS LAST, id ASC
+	ORDER BY date ASC NULLS LAST, time ASC NULLS LAST
 	LIMIT 200`
 
 func (s *AuctionsService) GetAuctions(limit, offset int) ([]byte, int, error) {
-	cacheKey := fmt.Sprintf("auctions_%d_%d", limit, offset)
+	easternTZ, _ := time.LoadLocation("America/New_York")
+	todayStr := time.Now().In(easternTZ).Format("2006-01-02")
+	cacheKey := fmt.Sprintf("auctions_%s_%d_%d", todayStr, limit, offset)
 	if cached, found := cache.Cache.Get(cacheKey); found {
 		if data, ok := cached.([]byte); ok {
 			return data, http.StatusOK, nil

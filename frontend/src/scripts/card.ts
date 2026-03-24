@@ -70,7 +70,7 @@ export function createCardHTML(auction: any): string {
             title="Add to favorites"
             aria-pressed="false"
             aria-label="Add to favorites">
-            <i class="far fa-heart"></i>
+            <svg class="icon" aria-hidden="true"><use href="#icon-heart-o"></use></svg>
             <div class="fav-spinner"></div>
           </button>
         </div>

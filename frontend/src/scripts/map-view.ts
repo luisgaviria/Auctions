@@ -67,13 +67,12 @@ export async function setView(showMap: boolean): Promise<void> {
   state.isMapView = showMap;
   const gridView = document.getElementById('grid-view');
   const mapSplit = document.getElementById('map-split');
-  const icon     = document.getElementById('toggle-icon');
   const label    = document.getElementById('toggle-label');
 
   if (showMap) {
     if (gridView) gridView.style.display = 'none';
     if (mapSplit) mapSplit.style.display = 'flex';
-    if (icon)     icon.className  = 'fas fa-th';
+    document.getElementById('toggle-use')?.setAttribute('href', '#icon-th');
     if (label)    label.textContent = 'Grid View';
 
     populateMapCards(state.currentMapAuctions ?? state.allAuctions);
@@ -96,7 +95,7 @@ export async function setView(showMap: boolean): Promise<void> {
   } else {
     if (mapSplit) mapSplit.style.display = 'none';
     if (gridView) gridView.style.display = '';
-    if (icon)     icon.className  = 'fas fa-map';
+    document.getElementById('toggle-use')?.setAttribute('href', '#icon-map');
     if (label)    label.textContent = 'Show Map';
   }
 }

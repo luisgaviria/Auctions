@@ -14,7 +14,7 @@ const apiUrl = import.meta.env.VITE_API_URL;
       <form class="auth-form" id="loginForm">
         <div class="form-group">
           <label class="form-label" for="email">
-            <i class="fas fa-envelope"></i>
+            <svg class="icon" aria-hidden="true"><use href="#icon-envelope"></use></svg>
             Email Address
           </label>
           <input
@@ -29,7 +29,7 @@ const apiUrl = import.meta.env.VITE_API_URL;
 
         <div class="form-group">
           <label class="form-label" for="password">
-            <i class="fas fa-lock"></i>
+            <svg class="icon" aria-hidden="true"><use href="#icon-lock"></use></svg>
             Password
           </label>
           <div class="password-input">
@@ -42,13 +42,13 @@ const apiUrl = import.meta.env.VITE_API_URL;
               autocomplete="current-password"
             />
             <button type="button" class="toggle-password" aria-label="Toggle password visibility">
-              <i class="far fa-eye"></i>
+              <svg class="icon" aria-hidden="true"><use id="eye-use" href="#icon-eye"></use></svg>
             </button>
           </div>
         </div>
 
         <button type="submit" class="btn btn-primary w-full">
-          <i class="fas fa-sign-in-alt"></i>
+          <svg class="icon" aria-hidden="true"><use href="#icon-sign-in"></use></svg>
           Sign In
         </button>
 
@@ -70,8 +70,8 @@ const apiUrl = import.meta.env.VITE_API_URL;
     togglePassword.addEventListener('click', () => {
       const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
       passwordInput.setAttribute('type', type);
-      togglePassword.querySelector('i').className =
-        type === 'password' ? 'far fa-eye' : 'far fa-eye-slash';
+      const useEl = togglePassword.querySelector('use');
+      if (useEl) useEl.setAttribute('href', type === 'password' ? '#icon-eye' : '#icon-eye');
     });
 
     // Form submission
@@ -81,7 +81,7 @@ const apiUrl = import.meta.env.VITE_API_URL;
       const submitButton = e.target.querySelector('button[type="submit"]');
       const originalContent = submitButton.innerHTML;
       submitButton.disabled = true;
-      submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing in...';
+      submitButton.innerHTML = '<svg class=\"icon icon--spin\" aria-hidden=\"true\"><use href=\"#icon-spinner\"></use></svg> Signing in...';
 
       try {
         const response = await fetch(`${apiUrl}/auth/login`, {
@@ -184,7 +184,7 @@ const apiUrl = import.meta.env.VITE_API_URL;
     margin-bottom: var(--spacing-xs);
   }
 
-  .form-label i {
+  .form-label .icon {
     color: var(--color-primary);
     font-size: 0.875rem;
   }

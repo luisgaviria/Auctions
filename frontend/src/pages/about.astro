@@ -13,7 +13,7 @@ import Layout from '../layouts/Layout.astro';
       <div class="content-card">
         <section class="about-section">
           <h2>
-            <i class="fas fa-gavel"></i>
+            <svg class="icon" aria-hidden="true"><use href="#icon-gavel"></use></svg>
             What We Do
           </h2>
           <p>
@@ -25,7 +25,7 @@ import Layout from '../layouts/Layout.astro';
 
         <section class="about-section">
           <h2>
-            <i class="fas fa-users"></i>
+            <svg class="icon" aria-hidden="true"><use href="#icon-users"></use></svg>
             Who We Serve
           </h2>
           <p>
@@ -38,26 +38,26 @@ import Layout from '../layouts/Layout.astro';
 
         <section class="about-section">
           <h2>
-            <i class="fas fa-lightbulb"></i>
+            <svg class="icon" aria-hidden="true"><use href="#icon-lightbulb"></use></svg>
             Our Features
           </h2>
           <ul class="features-list">
             <li>
-              <i class="fas fa-search"></i>
+              <svg class="icon" aria-hidden="true"><use href="#icon-search"></use></svg>
               <div>
                 <h3>Easy Search</h3>
                 <p>Find relevant auctions quickly with our intuitive search system</p>
               </div>
             </li>
             <li>
-              <i class="fas fa-heart"></i>
+              <svg class="icon" aria-hidden="true"><use href="#icon-heart"></use></svg>
               <div>
                 <h3>Favorites</h3>
                 <p>Save and track auctions you're interested in</p>
               </div>
             </li>
             <li>
-              <i class="fas fa-bell"></i>
+              <svg class="icon" aria-hidden="true"><use href="#icon-bell"></use></svg>
               <div>
                 <h3>Updates</h3>
                 <p>Stay informed about auction status changes and important dates</p>
@@ -68,7 +68,7 @@ import Layout from '../layouts/Layout.astro';
 
         <section class="about-section">
           <h2>
-            <i class="fas fa-handshake"></i>
+            <svg class="icon" aria-hidden="true"><use href="#icon-handshake"></use></svg>
             Get Started
           </h2>
           <p>
@@ -78,11 +78,11 @@ import Layout from '../layouts/Layout.astro';
           </p>
           <div class="cta-buttons">
             <a href="/register" class="btn btn-primary">
-              <i class="fas fa-user-plus"></i>
+              <svg class="icon" aria-hidden="true"><use href="#icon-user-plus"></use></svg>
               Create Account
             </a>
             <a href="/" class="btn btn-secondary">
-              <i class="fas fa-search"></i>
+              <svg class="icon" aria-hidden="true"><use href="#icon-search"></use></svg>
               Browse Auctions
             </a>
           </div>
@@ -133,7 +133,7 @@ import Layout from '../layouts/Layout.astro';
     margin-bottom: var(--spacing-lg);
   }
 
-  .about-section h2 i {
+  .about-section h2 .icon {
     font-size: 1.25rem;
   }
 
@@ -156,7 +156,7 @@ import Layout from '../layouts/Layout.astro';
     gap: var(--spacing-md);
   }
 
-  .features-list i {
+  .features-list .icon {
     color: var(--color-primary);
     font-size: 1.25rem;
     padding: var(--spacing-sm);
