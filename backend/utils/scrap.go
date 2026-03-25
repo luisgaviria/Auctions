@@ -28,8 +28,7 @@ var upsertAuctionSQL = `
 		SET
 			status     = CASE WHEN auctions.status  IS DISTINCT FROM EXCLUDED.status
 			                  THEN EXCLUDED.status  ELSE auctions.status  END,
-			date       = CASE WHEN auctions.date    IS DISTINCT FROM EXCLUDED.date
-			                  THEN EXCLUDED.date    ELSE auctions.date    END,
+			date       = EXCLUDED.date,
 			deposit    = CASE WHEN auctions.deposit IS DISTINCT FROM EXCLUDED.deposit
 			                  THEN EXCLUDED.deposit ELSE auctions.deposit END,
 			time       = EXCLUDED.time,
@@ -135,20 +134,24 @@ func wrapLegacy(fn func() []sites.Auction) func(ctx context.Context) ([]sites.Au
 	}
 }
 
-// qualityIsPoor returns true when the auction slice is empty or more than half
-// of the records have a blank Street (address) field — a sign that the scraper
-// found the container HTML but failed to parse the data rows correctly.
+// qualityIsPoor returns true when the auction slice is empty, more than half
+// of the records have a blank Street field, or more than half have a blank Date
+// field — the latter catches scrapers that find addresses but fail to parse dates.
 func qualityIsPoor(auctions []sites.Auction) bool {
 	if len(auctions) == 0 {
 		return true
 	}
-	empty := 0
+	emptyStreet, emptyDate := 0, 0
 	for _, a := range auctions {
 		if a.Street == "" {
-			empty++
+			emptyStreet++
+		}
+		if a.Date == "" {
+			emptyDate++
 		}
 	}
-	return empty*2 > len(auctions) // >50% empty
+	n := len(auctions)
+	return emptyStreet*2 > n || emptyDate*2 > n
 }
 
 // aiRescue fetches HTML from fallbackURL and passes it to Gemini for auction

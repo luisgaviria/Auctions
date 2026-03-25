@@ -2,6 +2,7 @@ package sites
 
 import (
 	"regexp"
+	"strings"
 
 	"github.com/gocolly/colly/v2"
 )
@@ -10,9 +11,10 @@ func ScrapDean() []Auction {
 	url := "https://deanassociatesinc.com/auctions/"
 	c := colly.NewCollector()
 	priceRegex := regexp.MustCompile(`\$[\d,]+`)
-	// The Gatsby site renders date and time into the same cell without a
-	// separator, e.g. "Mar 23, 20263:00 PM". Split on the year boundary.
-	dateTimeRe := regexp.MustCompile(`(\w{3} \d+, \d{4})\s*(\d+:\d+ [AP]M)`)
+	// Match date+time regardless of whether the site uses 3-letter or full month
+	// names, and whether a weekday prefix (e.g. "WEDNESDAY, ") is present.
+	// Handles both old "Mar 23, 20263:00 PM" and new "WEDNESDAY, AUGUST 13, 2025,3:00 PM".
+	dateTimeRe := regexp.MustCompile(`(?i)(?:\w+,\s*)?([A-Za-z]+ \d+,?\s*\d{4}),?\s*(\d+:\d+\s*[AP]M)`)
 
 	auctions := make([]Auction, 0)
 
@@ -25,10 +27,10 @@ func ScrapDean() []Auction {
 					switch i {
 					case 0:
 						{
-							raw := td.Text
+							raw := strings.TrimRight(strings.TrimSpace(td.Text), ",")
 							if m := dateTimeRe.FindStringSubmatch(raw); len(m) == 3 {
-								auction.Date = m[1]
-								auction.Time = m[2]
+								auction.Date = strings.TrimRight(strings.TrimSpace(m[1]), ",")
+								auction.Time = strings.TrimSpace(m[2])
 							} else {
 								auction.Date = raw
 							}

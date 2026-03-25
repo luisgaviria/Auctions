@@ -47,12 +47,22 @@ func extractCommonHref(links string) string {
 // parseCommonDate parses "Friday, April 24, 2026 at 1:00 PM" into separate date/time strings.
 // Returns ("Apr 24, 2026", "1:00 PM") on success, or ("", "") on failure.
 func parseCommonDate(raw string) (date, timeStr string) {
-	t, err := time.Parse("Monday, January 2, 2006 at 3:04 PM", raw)
-	if err != nil {
-		log.Printf("[commonwealth] date parse error for %q: %v", raw, err)
-		return "", ""
-	}
-	return t.Format("Jan 2, 2006"), t.Format("3:04 PM")
+  // Clean the string: remove leading/trailing whitespace and the trailing comma
+  clean := strings.TrimSpace(raw)
+  clean = strings.TrimSuffix(clean, ",")
+
+  // The site uses "at" as a separator: "Friday, April 24, 2026 at 1:00 PM"
+  // Go's layout string must match the format exactly.
+  layout := "Monday, January 2, 2006 at 3:04 PM"
+  
+  t, err := time.Parse(layout, clean)
+  if err != nil {
+    log.Printf("[commonwealth] date parse error for %q: %v", raw, err)
+    return "", ""
+  }
+  
+  // Return in your preferred display format
+  return t.Format("Jan 2, 2006"), t.Format("3:04 PM")
 }
 
 // ScrapCommon fetches auction listings from the Commonwealth Auctions DataTable
