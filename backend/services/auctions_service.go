@@ -88,6 +88,7 @@ func (s *AuctionsService) GetAuctions(limit, offset int) ([]byte, int, error) {
 			&auction.Createdat,
 			&auction.SiteName,
 			&auction.UpdatedAt,
+			&auction.LastSeen,
 		); err != nil {
 			log.Printf("Error scanning auction: %v\n", err)
 			return nil, http.StatusInternalServerError, err

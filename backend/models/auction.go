@@ -23,6 +23,7 @@ type AuctionModel struct {
 	Lng       string       `json:"lng"`
 	Createdat time.Time    `json:"createdAt"`
 	UpdatedAt time.Time    `json:"updated_at"`
+	LastSeen  sql.NullTime `json:"-"` // internal sync column; not exposed in API responses
 }
 
 // AuctionJSON is the API response shape. Date is a human-readable string ("Jan 2, 2006")
