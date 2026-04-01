@@ -81,7 +81,7 @@ func isPastDate(dateStr string) bool {
 	// Normalise case so "AUGUST 13, 2025" → "August 13, 2025" for time.Parse.
 	normalized := strings.Title(strings.ToLower(strings.TrimSpace(dateStr))) //nolint:staticcheck
 	today := time.Now().Truncate(24 * time.Hour)
-	for _, layout := range []string{"2006-01-02", "Jan 2, 2006", "January 2, 2006"} {
+	for _, layout := range []string{"2006-01-02", "Jan 2, 2006", "January 2, 2006", "01/02/2006"} {
 		if t, err := time.Parse(layout, normalized); err == nil {
 			return t.Before(today)
 		}

@@ -44,6 +44,21 @@ func extractCommonHref(links string) string {
 	return links[start : start+end]
 }
 
+// splitCommonLocation splits a raw Location string like "2084 Washington Street Newton"
+// into a street and city.  Commonwealth appends the city as the last whitespace-
+// separated token, so we split on the final space.
+func splitCommonLocation(location string) (street, city string) {
+	loc := strings.TrimSpace(location)
+	if loc == "" {
+		return "", ""
+	}
+	i := strings.LastIndex(loc, " ")
+	if i == -1 {
+		return loc, ""
+	}
+	return strings.TrimSpace(loc[:i]), strings.TrimSpace(loc[i+1:])
+}
+
 // parseCommonDate parses "Friday, April 24, 2026 at 1:00 PM" into separate date/time strings.
 // Returns ("Apr 24, 2026", "1:00 PM") on success, or ("", "") on failure.
 func parseCommonDate(raw string) (date, timeStr string) {
@@ -99,13 +114,14 @@ func ScrapCommon(ctx context.Context) ([]Auction, error) {
 			continue
 		}
 		date, timeStr := parseCommonDate(row.Date)
+		street, city := splitCommonLocation(row.Location)
 		auctions = append(auctions, Auction{
 			SiteName: "commonwealth",
 			Logo:     "/commonwealth.webp",
 			Date:     date,
 			Time:     timeStr,
-			Street:   row.Location,
-			City:     row.State,
+			Street:   street,
+			City:     city,
 			Status:   row.Status,
 			Deposit:  row.Deposit,
 			Url:      extractCommonHref(row.Links),
