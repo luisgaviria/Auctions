@@ -49,6 +49,13 @@ func InitDb(url string) *sql.DB {
 	return db
 }
 
+// addLastSeenColumn is idempotent: IF NOT EXISTS means it is safe to run on an
+// existing database.  The UPDATE backfills rows that predate this migration so
+// they are not swept on the very first scrape after deployment.
+var addLastSeenColumn = `
+ALTER TABLE auctions ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ;
+UPDATE auctions SET last_seen = updated_at WHERE last_seen IS NULL;`
+
 func InitTables(db *sql.DB) {
 	pingErr := db.Ping()
 	if pingErr != nil {
@@ -70,6 +77,12 @@ func InitTables(db *sql.DB) {
 	if err != nil {
 		log.Fatal(err.Error())
 		panic("Wrong Query For Favorites")
+	}
+
+	_, err = db.Exec(addLastSeenColumn)
+	if err != nil {
+		log.Fatal(err.Error())
+		panic("Migration 006 failed: add last_seen column")
 	}
 
 	log.Print("Succesfully initialized tables!")

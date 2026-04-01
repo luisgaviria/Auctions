@@ -59,6 +59,15 @@ func main() {
 
 	db := utils.InitDb(dbURL)
 	utils.InitTables(db)
+
+	// Purge past auctions before each scrape run so stale records don't linger.
+	if res, err := db.Exec("DELETE FROM auctions WHERE date < CURRENT_DATE"); err != nil {
+		log.Printf("[purge] failed to delete past auctions: %v", err)
+	} else {
+		n, _ := res.RowsAffected()
+		log.Printf("[purge] deleted %d past auctions", n)
+	}
+
 	// utils.ScrapAllSites(db)
 
 	// Initialize controllers

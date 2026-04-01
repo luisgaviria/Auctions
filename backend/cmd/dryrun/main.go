@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -21,6 +22,7 @@ import (
 )
 
 func main() {
+	fmt.Println("🚀 CONNECTION SUCCESSFUL - STARTING SCRAPERS")
 	if os.Getenv("ENV") != "PROD" {
 		if err := godotenv.Load(); err != nil {
 			log.Fatal("error loading .env file")
@@ -31,15 +33,34 @@ func main() {
 	if dbURL == "" {
 		log.Fatal("DATABASE_URL not set")
 	}
+	// Append a driver-level connect_timeout so the TCP+SSL handshake itself
+	// cannot block indefinitely (distinct from the context deadline below).
+	if !strings.Contains(dbURL, "connect_timeout") {
+		sep := "?"
+		if strings.Contains(dbURL, "?") {
+			sep = "&"
+		}
+		dbURL += sep + "connect_timeout=15"
+	}
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("db open: %v", err)
 	}
 	defer db.Close()
-	if err := db.Ping(); err != nil {
+
+	// PingContext with an explicit deadline so a stalled SSL handshake
+	// (a known macOS Sequoia/Sonoma issue with Go's TLS stack) fails fast
+	// instead of hanging the process forever.
+	pingCtx, pingCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer pingCancel()
+	if err := db.PingContext(pingCtx); err != nil {
 		log.Fatalf("db ping: %v", err)
 	}
 	log.Println("connected to Supabase")
+
+	// Apply any pending schema migrations (idempotent — safe on every run).
+	utils.InitTables(db)
 
 	// 15 minutes: generous ceiling for 12 parallel scrapers + cleanup phase.
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)

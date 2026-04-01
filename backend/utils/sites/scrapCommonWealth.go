@@ -47,9 +47,8 @@ func extractCommonHref(links string) string {
 // parseCommonDate parses "Friday, April 24, 2026 at 1:00 PM" into separate date/time strings.
 // Returns ("Apr 24, 2026", "1:00 PM") on success, or ("", "") on failure.
 func parseCommonDate(raw string) (date, timeStr string) {
-  // Clean the string: remove leading/trailing whitespace and the trailing comma
-  clean := strings.TrimSpace(raw)
-  clean = strings.TrimSuffix(clean, ",")
+  // Clean the string: remove leading/trailing whitespace, commas, and spaces.
+  clean := strings.TrimRight(strings.TrimSpace(raw), ", ")
 
   // The site uses "at" as a separator: "Friday, April 24, 2026 at 1:00 PM"
   // Go's layout string must match the format exactly.

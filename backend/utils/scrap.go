@@ -15,35 +15,34 @@ import (
 
 // upsertAuctionSQL inserts a new auction or refreshes mutable fields on conflict.
 //
-// updated_at is ALWAYS bumped on every scrape run — even when nothing changed —
-// so the cleanup phase can reliably identify rows that were NOT seen in the last
-// scrape (i.e., removed from the source site). The CASE expressions ensure that
-// status/date/deposit only change when the source data actually differs.
+// last_seen is stamped NOW() on every hit so the post-scrape sweep can identify
+// rows that were genuinely removed from the source site (not seen for 6 h).
+// date uses COALESCE so a scraper that temporarily returns a broken/null date
+// does not overwrite a good date already stored in the DB.
 var upsertAuctionSQL = `
 	INSERT INTO auctions
-		(address, city, state, time, logo, site_name, status, link, date, deposit, lat, lng)
+		(address, city, state, time, logo, site_name, status, link, date, deposit, lat, lng, last_seen)
 	VALUES
-		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
 	ON CONFLICT (address, site_name) DO UPDATE
 		SET
 			status     = CASE WHEN auctions.status  IS DISTINCT FROM EXCLUDED.status
 			                  THEN EXCLUDED.status  ELSE auctions.status  END,
-			date       = EXCLUDED.date,
+			date       = COALESCE(EXCLUDED.date, auctions.date),
 			deposit    = CASE WHEN auctions.deposit IS DISTINCT FROM EXCLUDED.deposit
 			                  THEN EXCLUDED.deposit ELSE auctions.deposit END,
 			time       = EXCLUDED.time,
 			link       = EXCLUDED.link,
+			last_seen  = NOW(),
 			updated_at = NOW()
 	RETURNING id;`
 
-// markStaleSQL marks auctions that were not seen in the last hour as Removed.
-// Run once per site_name after all upserts for that site complete.
-var markStaleSQL = `
-	UPDATE auctions
-	SET    status = 'Removed'
-	WHERE  site_name  = $1
-	  AND  updated_at < NOW() - INTERVAL '1 hour'
-	  AND  status    != 'Removed';`
+// sweepStaleSQL hard-deletes rows that have not been seen by any scraper in the
+// last 6 hours.  The 6-hour window means a single transient scraper failure
+// leaves data intact; two consecutive missed runs signal genuine removal.
+var sweepStaleSQL = `
+	DELETE FROM auctions
+	WHERE last_seen < NOW() - INTERVAL '6 hours';`
 
 // normalizeStatus maps cancellation/sale/past variants to the canonical "Removed"
 // value so the DB stays consistent regardless of how individual sites phrase it.
@@ -73,9 +72,33 @@ func normalizeTime(raw string) string {
 	return raw
 }
 
+// isPastDate returns true when dateStr can be parsed and falls before today.
+// Unrecognised formats return false so the record is still saved.
+func isPastDate(dateStr string) bool {
+	if dateStr == "" {
+		return false
+	}
+	// Normalise case so "AUGUST 13, 2025" → "August 13, 2025" for time.Parse.
+	normalized := strings.Title(strings.ToLower(strings.TrimSpace(dateStr))) //nolint:staticcheck
+	today := time.Now().Truncate(24 * time.Hour)
+	for _, layout := range []string{"2006-01-02", "Jan 2, 2006", "January 2, 2006"} {
+		if t, err := time.Parse(layout, normalized); err == nil {
+			return t.Before(today)
+		}
+	}
+	return false
+}
+
 func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 	a.Status = normalizeStatus(a.Status)
 	a.Time = normalizeTime(a.Time)
+
+	// Skip auctions whose date has already passed — no point storing them.
+	if isPastDate(a.Date) {
+		log.Printf("[upsert] skipping past auction addr=%q site=%s date=%s", a.Street, a.SiteName, a.Date)
+		return
+	}
+
 	// Pass nil for empty date strings so the DB receives SQL NULL rather than
 	// an invalid date literal (e.g. APG listings have no scheduled date).
 	var dateParam interface{}
@@ -105,15 +128,14 @@ func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 	log.Printf("[upsert] saved auction id=%d  site=%s  addr=%q", id, a.SiteName, a.Street)
 }
 
-func markStaleAuctions(ctx context.Context, db *sql.DB, siteName string) {
-	res, err := db.ExecContext(ctx, markStaleSQL, siteName)
+func sweepStaleAuctions(ctx context.Context, db *sql.DB) {
+	res, err := db.ExecContext(ctx, sweepStaleSQL)
 	if err != nil {
-		log.Printf("[cleanup] error for site=%s: %v", siteName, err)
+		log.Printf("[sweep] error: %v", err)
 		return
 	}
-	if n, _ := res.RowsAffected(); n > 0 {
-		log.Printf("[cleanup] marked %d stale auctions as Removed for site=%s", n, siteName)
-	}
+	n, _ := res.RowsAffected()
+	log.Printf("[sweep] deleted %d auctions not seen in the last 6 hours", n)
 }
 
 // scraperDef pairs a canonical site name with a context-aware scraper function.
@@ -246,10 +268,7 @@ func DryRunCFScrapers(ctx context.Context, db *sql.DB) {
 		}
 	}
 
-	log.Printf("[dryrun] cleanup phase for sites: %v", successfulSites)
-	for _, siteName := range successfulSites {
-		markStaleAuctions(ctx, db, siteName)
-	}
+	sweepStaleAuctions(ctx, db)
 	log.Printf("[dryrun] complete")
 }
 
@@ -353,10 +372,9 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 		}
 	}
 
-	// Cleanup phase — runs after ALL upserts are committed
-	log.Printf("[cleanup] starting stale-auction cleanup for %d sites", len(successfulSites))
-	for _, siteName := range successfulSites {
-		markStaleAuctions(ctx, db, siteName)
-	}
+	// Tag & Sweep — hard-delete any row not touched in the last 6 hours.
+	// Runs once after ALL sites have upserted so a single failing scraper
+	// does not prematurely delete its auctions.
+	sweepStaleAuctions(ctx, db)
 	log.Printf("[scraper] run complete")
 }
