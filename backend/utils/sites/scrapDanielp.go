@@ -3,6 +3,7 @@ package sites
 import (
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly/v2"
@@ -14,6 +15,17 @@ var (
 	dpDateRe = regexp.MustCompile(`(\d{1,2}/\d{1,2}/\d{4})`)
 	dpTimeRe = regexp.MustCompile(`(\d{1,2}:\d{2}\s*[APap][Mm])`)
 )
+
+// normalizeDPDate converts M/D/YYYY or MM/DD/YYYY to "2006-01-02" (ISO).
+// Returns the input unchanged if it cannot be parsed.
+func normalizeDPDate(s string) string {
+	for _, layout := range []string{"01/02/2006", "1/2/2006", "1/02/2006", "01/2/2006"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.Format("2006-01-02")
+		}
+	}
+	return s
+}
 
 func ScrapDanielP() []Auction {
 	logo := "/danielp.webp"
@@ -55,7 +67,7 @@ func ScrapDanielP() []Auction {
 					if idx == 1 {
 						raw := b.Text()
 						if m := dpDateRe.FindString(raw); m != "" {
-							date = m
+							date = normalizeDPDate(m)
 						}
 						if m := dpTimeRe.FindString(raw); m != "" {
 							time = strings.TrimSpace(m)
@@ -67,7 +79,7 @@ func ScrapDanielP() []Auction {
 				if postponed := strings.TrimSpace(divElement.DOM.Children().Find(".Postponed").Text()); postponed != "" {
 					raw := divElement.DOM.Children().Find("b").Text()
 					if m := dpDateRe.FindString(raw); m != "" {
-						date = m
+						date = normalizeDPDate(m)
 					}
 					if m := dpTimeRe.FindString(raw); m != "" {
 						time = strings.TrimSpace(m)

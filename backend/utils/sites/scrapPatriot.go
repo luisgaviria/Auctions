@@ -30,7 +30,7 @@ func ScrapPatriot(ctx context.Context) ([]Auction, error) {
 
 	var auctions []Auction
 	doc.Find("#calendar > div > a").Each(func(_ int, a *goquery.Selection) {
-		address := strings.TrimSpace(a.Find("h1").Text())
+		rawAddress := strings.TrimSpace(a.Find("h1").Text())
 		rawDate := strings.TrimSpace(a.Find(".auction-date").Text())
 		rawDate = strings.TrimSpace(strings.Split(rawDate, "Continued")[0])
 
@@ -40,10 +40,26 @@ func ScrapPatriot(ctx context.Context) ([]Auction, error) {
 		formattedDate, formattedTime := parseDateAndTimePatriot(rawDate)
 		deposit, status := patriotDetail(ctx, fullHref)
 
+		// Patriot formats addresses as "47 Foss Road - Gardner, MA".
+		// Split on " - " to separate the street from the city/state token.
+		street := rawAddress
+		city := ""
+		if parts := strings.SplitN(rawAddress, " - ", 2); len(parts) == 2 {
+			street = strings.TrimSpace(parts[0])
+			// City is the word before the state abbreviation: "Gardner, MA" → "Gardner"
+			cityState := strings.TrimSpace(parts[1])
+			if comma := strings.Index(cityState, ","); comma != -1 {
+				city = strings.TrimSpace(cityState[:comma])
+			} else {
+				city = cityState
+			}
+		}
+
 		auctions = append(auctions, Auction{
 			SiteName: "patriot",
 			Logo:     patriotLogo,
-			Street:   address,
+			Street:   street,
+			City:     city,
 			Url:      fullHref,
 			Date:     formattedDate,
 			Time:     formattedTime,

@@ -24,10 +24,16 @@ type GetAuctionsResponse struct {
 	Auctions []models.AuctionJSON `json:"auctions"`
 }
 
+// auctionCols is the explicit column list used by both queries.  Listing
+// columns instead of SELECT * means adding new DB columns (e.g. last_seen)
+// never breaks the scan regardless of migration order across environments.
+const auctionCols = `id, address, city, state, time, logo, status, link,
+	date, deposit, lat, lng, "createdAt", site_name, updated_at, last_seen`
+
 // selectFilteredAuctions excludes terminal/past statuses, drops past-dated rows,
 // and sorts upcoming auctions chronologically.
 var selectFilteredAuctions = `
-	SELECT * FROM auctions
+	SELECT ` + auctionCols + ` FROM auctions
 	WHERE LOWER(status) NOT IN (
 		'cancelled', 'sold', 'removed', 'canceled',
 		'sold back to mortgagee', 'back to mortgagee',
@@ -40,7 +46,7 @@ var selectFilteredAuctions = `
 // selectAuctionsInBounds returns geocoded auctions within a lat/lng bounding box.
 // lat/lng are stored as text; we cast to float8 for the range check.
 var selectAuctionsInBounds = `
-	SELECT * FROM auctions
+	SELECT ` + auctionCols + ` FROM auctions
 	WHERE LOWER(status) NOT IN (
 		'cancelled', 'sold', 'removed', 'canceled',
 		'sold back to mortgagee', 'back to mortgagee',
@@ -142,6 +148,7 @@ func (s *AuctionsService) GetAuctionsInBounds(south, north, west, east float64) 
 			&auction.Createdat,
 			&auction.SiteName,
 			&auction.UpdatedAt,
+			&auction.LastSeen,
 		); err != nil {
 			log.Printf("Error scanning auction (bbox): %v\n", err)
 			return nil, http.StatusInternalServerError, err

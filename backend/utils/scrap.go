@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -24,7 +25,7 @@ var upsertAuctionSQL = `
 		(address, city, state, time, logo, site_name, status, link, date, deposit, lat, lng, last_seen)
 	VALUES
 		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
-	ON CONFLICT (address, site_name) DO UPDATE
+	ON CONFLICT ON CONSTRAINT uq_auctions_address_site DO UPDATE
 		SET
 			status     = CASE WHEN auctions.status  IS DISTINCT FROM EXCLUDED.status
 			                  THEN EXCLUDED.status  ELSE auctions.status  END,
@@ -33,7 +34,7 @@ var upsertAuctionSQL = `
 			                  THEN EXCLUDED.deposit ELSE auctions.deposit END,
 			time       = EXCLUDED.time,
 			link       = EXCLUDED.link,
-			last_seen  = NOW(),
+			last_seen  = EXCLUDED.last_seen,
 			updated_at = NOW()
 	RETURNING id;`
 
@@ -43,6 +44,65 @@ var upsertAuctionSQL = `
 var sweepStaleSQL = `
 	DELETE FROM auctions
 	WHERE last_seen < NOW() - INTERVAL '6 hours';`
+
+// cleanAddrRe matches boilerplate fragments that scrapers embed in raw address
+// strings: deed-registry citations (B123/P456), and free-text clauses that
+// begin with the keywords Mortgage, Registry, Book, or View property.
+var cleanAddrRe = regexp.MustCompile(`(?i),?\s*(?:B\d+/P\d+\S*|(?:Mortgage|Registry|Book)\b[^,\n]*|View\s*property[^\n]*)`)
+
+// CleanStreetAddress removes boilerplate from a raw scraper address and trims
+// trailing punctuation.  Applied to every auction's Street field before the
+// DB upsert so no scraper-specific caller needs to handle it.
+func CleanStreetAddress(s string) string {
+	s = cleanAddrRe.ReplaceAllString(s, "")
+	return strings.TrimRight(strings.TrimSpace(s), ",;- ")
+}
+
+// streetAbbrevs expands common US street-suffix abbreviations to their full
+// form.  Each regex only fires when the abbreviation sits at the end of the
+// string or immediately before a comma, so "ST JAMES ST" becomes
+// "ST JAMES STREET" (the leading "ST" is not a suffix and is left alone).
+// Patterns are applied after uppercasing, so matching is always uppercase.
+var streetAbbrevs = []struct {
+	re   *regexp.Regexp
+	full string
+}{
+	{regexp.MustCompile(`\bST(,|$)`), "STREET$1"},
+	{regexp.MustCompile(`\bRD(,|$)`), "ROAD$1"},
+	{regexp.MustCompile(`\bAVE(,|$)`), "AVENUE$1"},
+	{regexp.MustCompile(`\bBLVD(,|$)`), "BOULEVARD$1"},
+	{regexp.MustCompile(`\bDR(,|$)`), "DRIVE$1"},
+	{regexp.MustCompile(`\bLN(,|$)`), "LANE$1"},
+	{regexp.MustCompile(`\bCT(,|$)`), "COURT$1"},
+	{regexp.MustCompile(`\bPL(,|$)`), "PLACE$1"},
+	{regexp.MustCompile(`\bTERR?(,|$)`), "TERRACE$1"},
+	{regexp.MustCompile(`\bHWY(,|$)`), "HIGHWAY$1"},
+	{regexp.MustCompile(`\bCIR(,|$)`), "CIRCLE$1"},
+	{regexp.MustCompile(`\bPKWY(,|$)`), "PARKWAY$1"},
+}
+
+// NormalizeStreet uppercases s and expands suffix abbreviations so that
+// "47 Foss Rd" and "47 FOSS ROAD" resolve to the same conflict key.
+func NormalizeStreet(s string) string {
+	s = strings.ToUpper(strings.TrimSpace(s))
+	for _, abbr := range streetAbbrevs {
+		s = abbr.re.ReplaceAllString(s, abbr.full)
+	}
+	return s
+}
+
+// NormalizeAuction applies every address-cleaning and normalization step in
+// one place so the result is identical whether called from ScrapAllSites,
+// DryRunCFScrapers, or any future caller.  The returned copy is safe to pass
+// directly to upsertAuction.
+func NormalizeAuction(a sites.Auction) sites.Auction {
+	a.Street = CleanStreetAddress(strings.TrimSpace(a.Street))
+	a.Street = NormalizeStreet(a.Street)
+	a.City = strings.TrimSpace(a.City)
+	a.Status = normalizeStatus(a.Status)
+	a.Time = normalizeTime(a.Time)
+	return a
+}
 
 // normalizeStatus maps cancellation/sale/past variants to the canonical "Removed"
 // value so the DB stays consistent regardless of how individual sites phrase it.
@@ -89,10 +149,9 @@ func isPastDate(dateStr string) bool {
 	return false
 }
 
+// upsertAuction writes a single already-normalised auction to the DB.
+// Callers must run NormalizeAuction before calling this function.
 func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
-	a.Status = normalizeStatus(a.Status)
-	a.Time = normalizeTime(a.Time)
-
 	// Skip auctions whose date has already passed — no point storing them.
 	if isPastDate(a.Date) {
 		log.Printf("[upsert] skipping past auction addr=%q site=%s date=%s", a.Street, a.SiteName, a.Date)
@@ -248,6 +307,7 @@ func DryRunCFScrapers(ctx context.Context, db *sql.DB) {
 		{"patriot", sites.ScrapPatriot, "https://patriotauctioneers.com/auctions-in-massachusetts/"},
 	}
 
+	seen := make(map[string]bool)
 	var successfulSites []string
 	for _, def := range targets {
 		log.Printf("[dryrun] starting %s", def.name)
@@ -264,6 +324,13 @@ func DryRunCFScrapers(ctx context.Context, db *sql.DB) {
 		}
 		successfulSites = append(successfulSites, def.name)
 		for _, a := range auctions {
+			a = NormalizeAuction(a)
+			key := a.Street + "|" + a.SiteName
+			if seen[key] {
+				log.Printf("[dedup] skipping duplicate addr=%q site=%s", a.Street, a.SiteName)
+				continue
+			}
+			seen[key] = true
 			upsertAuction(ctx, db, a)
 		}
 	}
@@ -339,8 +406,9 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 		close(ch)
 	}()
 
-	// Drain results sequentially. This loop is single-threaded, so successfulSites
-	// needs no mutex — only this goroutine writes to it.
+	// Drain results sequentially. This loop is single-threaded, so both
+	// successfulSites and seen need no mutex — only this goroutine writes them.
+	seen := make(map[string]bool)
 	var successfulSites []string
 	for res := range ch {
 		if res.err != nil {
@@ -368,6 +436,13 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 		}
 		successfulSites = append(successfulSites, res.def.name)
 		for _, a := range res.auctions {
+			a = NormalizeAuction(a)
+			key := a.Street + "|" + a.SiteName
+			if seen[key] {
+				log.Printf("[dedup] skipping duplicate addr=%q site=%s", a.Street, a.SiteName)
+				continue
+			}
+			seen[key] = true
 			upsertAuction(ctx, db, a)
 		}
 	}

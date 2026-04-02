@@ -48,12 +48,16 @@ func extractCommonHref(links string) string {
 // into a street and city.  Commonwealth appends the city as the last whitespace-
 // separated token, so we split on the final space.
 func splitCommonLocation(location string) (street, city string) {
+	if location == "" {
+		return "", ""
+	}
 	loc := strings.TrimSpace(location)
 	if loc == "" {
 		return "", ""
 	}
 	i := strings.LastIndex(loc, " ")
-	if i == -1 {
+	if i <= 0 {
+		// Single token or space at position 0 — treat whole string as street.
 		return loc, ""
 	}
 	return strings.TrimSpace(loc[:i]), strings.TrimSpace(loc[i+1:])

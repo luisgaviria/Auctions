@@ -12,6 +12,10 @@ import (
 // "POSTPONED TO 05/20/2026@12:00PM".
 var sriPostponedRe = regexp.MustCompile(`(?i)POSTPONED\s+TO\s+(\d{2}/\d{2}/\d{4})`)
 
+// sriRegistryRe matches deed-registry citations embedded in SRI address cells,
+// e.g. ", B13812/P506" or "B1133/P82".
+var sriRegistryRe = regexp.MustCompile(`(?i),?\s*B\d+/P\d+\S*`)
+
 func ScrapSri() []Auction {
 	url := "http://www.auctionsri.com/scripts/auctions.asp?category=R"
 	resp, err := http.Get(url)
@@ -57,13 +61,29 @@ func ScrapSri() []Auction {
 			address = strings.TrimSpace(address)
 		}
 
-		address = address + ", " + city + ", " + state
+		// Remove deed-registry citations (e.g. "B13812/P506") before further parsing.
+		address = strings.TrimRight(strings.TrimSpace(sriRegistryRe.ReplaceAllString(address, "")), ",")
+
+		// If the city name appears inside the address cell (some rows embed the
+		// full "Street, City, State" in one column), truncate at the first comma
+		// after the city so the state abbreviation is dropped.
+		if city != "" {
+			if idx := strings.Index(address, city); idx != -1 {
+				rest := address[idx+len(city):]
+				if ci := strings.Index(rest, ","); ci != -1 {
+					address = strings.TrimSpace(address[:idx+len(city)+ci])
+				}
+			}
+		}
+
+		_ = state // state is excluded from the street field
 
 		data = append(data, Auction{
 			Logo:    logo,
 			Date:    date,
 			Time:    time,
 			Street:  address,
+			City:    city,
 			Status:  status,
 			Deposit: deposit,
 			Url:     url,

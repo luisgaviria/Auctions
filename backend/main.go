@@ -7,6 +7,7 @@ import (
 	"backendAuction/utils"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -55,7 +56,12 @@ func main() {
 	})
 
 	dbURL := config.GetDBURL()
-	log.Println("Connecting to database at:", dbURL)
+	// Log only the host so credentials are never written to Railway/stdout logs.
+	if parsed, err := url.Parse(dbURL); err == nil {
+		log.Printf("[db] connecting to host=%s", parsed.Host)
+	} else {
+		log.Println("[db] connecting to database (url unparseable)")
+	}
 
 	db := utils.InitDb(dbURL)
 	utils.InitTables(db)
