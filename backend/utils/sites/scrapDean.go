@@ -20,18 +20,19 @@ var deanWeekdayRe = regexp.MustCompile(`(?i)^(?:MONDAY|TUESDAY|WEDNESDAY|THURSDA
 //	"Mar 23, 20263:00 PM"       (year runs straight into time, no comma/space)
 var deanDateTimeRe = regexp.MustCompile(`(?i)([A-Za-z]+ \d+,?\s*\d{4}),?\s*(\d+:\d+\s*[AP]M)`)
 
-// canParseDeanDate returns true if s can be interpreted as a date by the
-// layouts Dean Associates produces.  Title-cases the input first so
-// "AUGUST 13, 2025" is accepted by Go's time.Parse.
-func canParseDeanDate(s string) bool {
+// normalizeDeanDate parses a Dean Associates date string (which may be all-caps
+// and have a trailing comma, e.g. "AUGUST 13, 2025,") and returns an ISO-8601
+// "2006-01-02" string.  Returns "" if the input cannot be parsed, which the
+// caller treats as a signal to skip the row.
+func normalizeDeanDate(s string) string {
 	// strings.Title is deprecated but correct for ASCII month names. //nolint:staticcheck
 	normalized := strings.Title(strings.ToLower(strings.TrimSpace(s)))
 	for _, layout := range []string{"January 2, 2006", "Jan 2, 2006", "2006-01-02"} {
-		if _, err := time.Parse(layout, normalized); err == nil {
-			return true
+		if t, err := time.Parse(layout, normalized); err == nil {
+			return t.Format("2006-01-02")
 		}
 	}
-	return false
+	return ""
 }
 
 func ScrapDean() []Auction {
@@ -72,14 +73,15 @@ func ScrapDean() []Auction {
 
 						dateStr := strings.TrimRight(strings.TrimSpace(m[1]), ", ")
 
-						// Step 4: validate the date is parseable before accepting it.
-						if !canParseDeanDate(dateStr) {
+						// Step 4: normalise to ISO-8601; skip the row if parsing fails.
+						isoDate := normalizeDeanDate(dateStr)
+						if isoDate == "" {
 							log.Printf("[dean] unparseable date %q (raw: %q) — skipping row", dateStr, raw)
 							skipRow = true
 							return
 						}
 
-						auction.Date = dateStr
+						auction.Date = isoDate
 						auction.Time = strings.TrimSpace(m[2])
 
 					case 2:

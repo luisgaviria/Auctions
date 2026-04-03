@@ -197,6 +197,30 @@ func sweepStaleAuctions(ctx context.Context, db *sql.DB) {
 	log.Printf("[sweep] deleted %d auctions not seen in the last 6 hours", n)
 }
 
+// purgePastAuctions hard-deletes every row whose date column is earlier than
+// today.  This runs at the top of each scrape run so auctions from the
+// previous calendar day are always removed before fresh data is upserted,
+// regardless of when the server process last restarted.
+//
+// The cast to DATE lets PostgreSQL compare text dates stored in ISO-8601
+// format ("2026-04-02") directly against CURRENT_DATE.  Non-ISO strings
+// that cannot be cast are skipped by the WHERE clause rather than causing
+// an error (the 6-hour sweep will eventually clean them up instead).
+func purgePastAuctions(ctx context.Context, db *sql.DB) {
+	const q = `
+		DELETE FROM auctions
+		WHERE date IS NOT NULL
+		  AND date ~ '^\d{4}-\d{2}-\d{2}$'
+		  AND date::date < CURRENT_DATE;`
+	res, err := db.ExecContext(ctx, q)
+	if err != nil {
+		log.Printf("[purge] error deleting past auctions: %v", err)
+		return
+	}
+	n, _ := res.RowsAffected()
+	log.Printf("[purge] deleted %d past auctions", n)
+}
+
 // scraperDef pairs a canonical site name with a context-aware scraper function.
 // fallbackURL is non-empty for CF-based scrapers; it is used to re-fetch HTML
 // for the AI self-healing fallback when the scraper returns 0 results.
@@ -346,6 +370,11 @@ func DryRunCFScrapers(ctx context.Context, db *sql.DB) {
 // The context controls the overall timeout and propagates cancellation to all
 // Cloudflare HTTP calls and database queries.
 func ScrapAllSites(ctx context.Context, db *sql.DB) {
+	// Remove any row whose date has already passed before scraping fresh data.
+	// This ensures stale auctions never re-surface even if the server has been
+	// running continuously since before midnight.
+	purgePastAuctions(ctx, db)
+
 	scrapers := []scraperDef{
 		// Cloudflare-migrated scrapers (context-aware, no local Chrome)
 		{"baystate", sites.ScrapBaystate, "https://www.baystateauction.com/auctions/"},
