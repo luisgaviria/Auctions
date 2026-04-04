@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	_ "time/tzdata" // embed IANA timezone DB so LoadLocation works on any host
 )
 
 // upsertAuctionSQL inserts a new auction or refreshes mutable fields on conflict.
@@ -44,6 +46,19 @@ var upsertAuctionSQL = `
 var sweepStaleSQL = `
 	DELETE FROM auctions
 	WHERE last_seen < NOW() - INTERVAL '6 hours';`
+
+// easternLoc is America/New_York, used for all "is this date in the past?"
+// comparisons so the server's own timezone (often UTC on Railway) does not
+// cause early-morning scrape runs to see yesterday's date.
+// Falls back to UTC and logs a warning if the tz database is unavailable.
+var easternLoc = func() *time.Location {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		log.Printf("[tz] America/New_York unavailable, falling back to UTC: %v", err)
+		return time.UTC
+	}
+	return loc
+}()
 
 // cleanAddrRe matches boilerplate fragments that scrapers embed in raw address
 // strings: deed-registry citations (B123/P456), and free-text clauses that
@@ -91,6 +106,38 @@ func NormalizeStreet(s string) string {
 	return s
 }
 
+// dateLayouts is the ordered list of formats that any scraper or Gemini rescue
+// call can produce.  Layouts are tried in order; the first match wins.
+// "2006-01-02" is listed first so already-normalized dates are free.
+var dateLayouts = []string{
+	"2006-01-02",      // ISO-8601 (DanielP, Dean after normalization)
+	"Jan 2, 2006",     // Gemini output, Commonwealth ("Apr 2, 2026")
+	"January 2, 2006", // long month (Dean raw, some SRI)
+	"01/02/2006",      // zero-padded MM/DD/YYYY (SRI)
+	"1/2/2006",        // single-digit M/D/YYYY (SRI, DanielP raw)
+	"1/02/2006",       // mixed single-month + zero-day
+	"01/2/2006",       // mixed zero-month + single-day
+}
+
+// normalizeDateToISO converts any date string a scraper or Gemini may produce
+// into ISO-8601 "2006-01-02".  Returns the original string unchanged if no
+// layout matches so the upsert still runs (PostgreSQL will reject invalid
+// DATE literals and the error will surface in the [upsert] log line).
+func normalizeDateToISO(s string) string {
+	if s == "" {
+		return ""
+	}
+	// Title-case normalises "AUGUST 13, 2025" → "August 13, 2025" and
+	// "APR 2, 2026" → "Apr 2, 2026" so time.Parse layouts match.
+	normalized := strings.Title(strings.ToLower(strings.TrimSpace(s))) //nolint:staticcheck
+	for _, layout := range dateLayouts {
+		if t, err := time.Parse(layout, normalized); err == nil {
+			return t.Format("2006-01-02")
+		}
+	}
+	return s
+}
+
 // NormalizeAuction applies every address-cleaning and normalization step in
 // one place so the result is identical whether called from ScrapAllSites,
 // DryRunCFScrapers, or any future caller.  The returned copy is safe to pass
@@ -99,6 +146,7 @@ func NormalizeAuction(a sites.Auction) sites.Auction {
 	a.Street = CleanStreetAddress(strings.TrimSpace(a.Street))
 	a.Street = NormalizeStreet(a.Street)
 	a.City = strings.TrimSpace(a.City)
+	a.Date = normalizeDateToISO(a.Date)
 	a.Status = normalizeStatus(a.Status)
 	a.Time = normalizeTime(a.Time)
 	return a
@@ -132,18 +180,71 @@ func normalizeTime(raw string) string {
 	return raw
 }
 
-// isPastDate returns true when dateStr can be parsed and falls before today.
+// todayET returns midnight of the current day in America/New_York.
+func todayET() time.Time {
+	now := time.Now().In(easternLoc)
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, easternLoc)
+}
+
+// isPastDate returns true when dateStr represents a date strictly before
+// today in America/New_York.  time.Parse returns a UTC time so we rebuild
+// the calendar date in ET before comparing.
 // Unrecognised formats return false so the record is still saved.
 func isPastDate(dateStr string) bool {
 	if dateStr == "" {
 		return false
 	}
-	// Normalise case so "AUGUST 13, 2025" → "August 13, 2025" for time.Parse.
 	normalized := strings.Title(strings.ToLower(strings.TrimSpace(dateStr))) //nolint:staticcheck
-	today := time.Now().Truncate(24 * time.Hour)
-	for _, layout := range []string{"2006-01-02", "Jan 2, 2006", "January 2, 2006", "01/02/2006"} {
+	today := todayET()
+	for _, layout := range dateLayouts {
 		if t, err := time.Parse(layout, normalized); err == nil {
-			return t.Before(today)
+			// Rebuild in ET: time.Parse returns UTC regardless of input.
+			day := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, easternLoc)
+			return day.Before(today)
+		}
+	}
+	return false
+}
+
+// timeLayouts covers every time format the scrapers and Gemini produce.
+var timeLayouts = []string{
+	"3:04 PM", "3:04 pm", "3:04PM", "3:04pm",
+	"3:04 AM", "3:04 am", "3:04AM", "3:04am",
+	"15:04",
+}
+
+// isElapsedToday returns true when the auction date is today in ET AND the
+// listed start time has already passed in ET.  This skips same-day auctions
+// that have already occurred (e.g. a 10 AM auction seen at 8 PM).
+// Returns false when either string is empty, the date is not today, or the
+// time string cannot be parsed — the auction is kept in those ambiguous cases.
+func isElapsedToday(dateStr, timeStr string) bool {
+	if dateStr == "" || timeStr == "" {
+		return false
+	}
+	normalized := strings.Title(strings.ToLower(strings.TrimSpace(dateStr))) //nolint:staticcheck
+	today := todayET()
+	nowET := time.Now().In(easternLoc)
+
+	var auctionDay time.Time
+	found := false
+	for _, layout := range dateLayouts {
+		if t, err := time.Parse(layout, normalized); err == nil {
+			auctionDay = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, easternLoc)
+			found = true
+			break
+		}
+	}
+	if !found || !auctionDay.Equal(today) {
+		return false
+	}
+
+	clean := strings.TrimSpace(timeStr)
+	for _, layout := range timeLayouts {
+		if t, err := time.Parse(layout, clean); err == nil {
+			auctionDT := time.Date(nowET.Year(), nowET.Month(), nowET.Day(),
+				t.Hour(), t.Minute(), 0, 0, easternLoc)
+			return auctionDT.Before(nowET)
 		}
 	}
 	return false
@@ -152,9 +253,14 @@ func isPastDate(dateStr string) bool {
 // upsertAuction writes a single already-normalised auction to the DB.
 // Callers must run NormalizeAuction before calling this function.
 func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
-	// Skip auctions whose date has already passed — no point storing them.
+	// Skip auctions whose date has already passed.
 	if isPastDate(a.Date) {
-		log.Printf("[upsert] skipping past auction addr=%q site=%s date=%s", a.Street, a.SiteName, a.Date)
+		log.Printf("[upsert] skipping past date addr=%q site=%s date=%s", a.Street, a.SiteName, a.Date)
+		return
+	}
+	// Skip same-day auctions whose start time has already passed in ET.
+	if isElapsedToday(a.Date, a.Time) {
+		log.Printf("[upsert] skipping elapsed auction addr=%q site=%s date=%s time=%s", a.Street, a.SiteName, a.Date, a.Time)
 		return
 	}
 
@@ -197,28 +303,88 @@ func sweepStaleAuctions(ctx context.Context, db *sql.DB) {
 	log.Printf("[sweep] deleted %d auctions not seen in the last 6 hours", n)
 }
 
-// purgePastAuctions hard-deletes every row whose date column is earlier than
-// today.  This runs at the top of each scrape run so auctions from the
-// previous calendar day are always removed before fresh data is upserted,
-// regardless of when the server process last restarted.
+// migrateNonISODates finds any auction whose date column contains a non-ISO
+// string (e.g. "Apr 2, 2026", "04/02/2026") and rewrites it as ISO-8601
+// ("2026-04-02") so the SQL purge, ORDER BY, and frontend all work correctly.
 //
-// The cast to DATE lets PostgreSQL compare text dates stored in ISO-8601
-// format ("2026-04-02") directly against CURRENT_DATE.  Non-ISO strings
-// that cannot be cast are skipped by the WHERE clause rather than causing
-// an error (the 6-hour sweep will eventually clean them up instead).
+// If the date column is a native PostgreSQL DATE type, date::text always
+// produces ISO-8601 output, so this function becomes a no-op — it scans zero
+// rows and logs "standardized 0/0 non-ISO dates".  The function is still
+// valuable as a defensive measure against future schema drift or manual edits.
+func migrateNonISODates(ctx context.Context, db *sql.DB) {
+	// Cast to text so the regex works regardless of whether the column is
+	// DATE or VARCHAR.  Only fetch rows whose text representation is NOT
+	// already in "YYYY-MM-DD" format.
+	const sel = `
+		SELECT id, date::text FROM auctions
+		WHERE date IS NOT NULL
+		  AND date::text !~ '^\d{4}-\d{2}-\d{2}$'`
+	rows, err := db.QueryContext(ctx, sel)
+	if err != nil {
+		log.Printf("[migrate] query error: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type row struct {
+		id   int
+		date string
+	}
+	var toFix []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.date); err == nil {
+			toFix = append(toFix, r)
+		}
+	}
+	rows.Close()
+
+	fixed := 0
+	for _, r := range toFix {
+		iso := normalizeDateToISO(r.date)
+		if iso == r.date || iso == "" {
+			log.Printf("[migrate] cannot normalize id=%d date=%q — leaving unchanged", r.id, r.date)
+			continue
+		}
+		if _, err := db.ExecContext(ctx,
+			`UPDATE auctions SET date = $1 WHERE id = $2`, iso, r.id); err != nil {
+			log.Printf("[migrate] update id=%d: %v", r.id, err)
+		} else {
+			fixed++
+		}
+	}
+	log.Printf("[migrate] standardized %d/%d non-ISO dates", fixed, len(toFix))
+}
+
+// purgePastAuctions hard-deletes every row whose date is earlier than today
+// in Massachusetts (America/New_York).
+//
+// The CASE WHEN makes it format-blind:
+//   • ISO dates (YYYY-MM-DD)  → cast to date and compare normally.
+//   • Any other format        → treated as CURRENT_DATE - 1 day, which is
+//     always < today, so the row is always deleted.
+//
+// This means legacy rows with "Apr 2, 2026", "04/02/2026", or any other
+// non-ISO string are caught and removed without needing to know their format.
+// Works identically whether the date column is DATE or VARCHAR.
 func purgePastAuctions(ctx context.Context, db *sql.DB) {
 	const q = `
 		DELETE FROM auctions
 		WHERE date IS NOT NULL
-		  AND date ~ '^\d{4}-\d{2}-\d{2}$'
-		  AND date::date < CURRENT_DATE;`
+		  AND (
+		    CASE
+		      WHEN date::text ~ '^\d{4}-\d{2}-\d{2}$'
+		        THEN date::date
+		      ELSE CURRENT_DATE - INTERVAL '1 day'
+		    END
+		  ) < (CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York')::date;`
 	res, err := db.ExecContext(ctx, q)
 	if err != nil {
-		log.Printf("[purge] error deleting past auctions: %v", err)
+		log.Printf("[purge] error: %v", err)
 		return
 	}
 	n, _ := res.RowsAffected()
-	log.Printf("[purge] deleted %d past auctions", n)
+	log.Printf("[purge] deleted %d past auctions (any-format, ET-aware)", n)
 }
 
 // scraperDef pairs a canonical site name with a context-aware scraper function.
@@ -325,6 +491,9 @@ func aiRescueFetchHTML(ctx context.Context, siteName, url string) string {
 // phase for those three sites. Used for verifying the CF migration without
 // triggering the full legacy scraper suite.
 func DryRunCFScrapers(ctx context.Context, db *sql.DB) {
+	migrateNonISODates(ctx, db)
+	purgePastAuctions(ctx, db)
+
 	targets := []scraperDef{
 		{"baystate", sites.ScrapBaystate, "https://www.baystateauction.com/auctions/"},
 		{"commonwealth", sites.ScrapCommon, "https://www.commonwealthauctions.com/ma-auctions"},
@@ -370,9 +539,9 @@ func DryRunCFScrapers(ctx context.Context, db *sql.DB) {
 // The context controls the overall timeout and propagates cancellation to all
 // Cloudflare HTTP calls and database queries.
 func ScrapAllSites(ctx context.Context, db *sql.DB) {
-	// Remove any row whose date has already passed before scraping fresh data.
-	// This ensures stale auctions never re-surface even if the server has been
-	// running continuously since before midnight.
+	// 1. Standardize any non-ISO dates in the DB so the purge comparison works.
+	migrateNonISODates(ctx, db)
+	// 2. Remove any row whose date has already passed (ET-aware).
 	purgePastAuctions(ctx, db)
 
 	scrapers := []scraperDef{

@@ -20,14 +20,31 @@ var deanWeekdayRe = regexp.MustCompile(`(?i)^(?:MONDAY|TUESDAY|WEDNESDAY|THURSDA
 //	"Mar 23, 20263:00 PM"       (year runs straight into time, no comma/space)
 var deanDateTimeRe = regexp.MustCompile(`(?i)([A-Za-z]+ \d+,?\s*\d{4}),?\s*(\d+:\d+\s*[AP]M)`)
 
+// deanDateLayouts mirrors the full layout list in utils/scrap.go so that any
+// date format Dean Associates (or a future site) uses is handled consistently.
+// Keep this in sync with the dateLayouts var in the parent package.
+var deanDateLayouts = []string{
+	"2006-01-02",      // ISO-8601
+	"Jan 2, 2006",     // short month
+	"January 2, 2006", // long month (most common Dean format)
+	"01/02/2006",      // zero-padded MM/DD/YYYY
+	"1/2/2006",        // single-digit M/D/YYYY
+	"1/02/2006",       // mixed
+	"01/2/2006",       // mixed
+}
+
 // normalizeDeanDate parses a Dean Associates date string (which may be all-caps
-// and have a trailing comma, e.g. "AUGUST 13, 2025,") and returns an ISO-8601
-// "2006-01-02" string.  Returns "" if the input cannot be parsed, which the
-// caller treats as a signal to skip the row.
+// and/or have trailing commas, e.g. "AUGUST 13, 2025,") and returns an
+// ISO-8601 "2006-01-02" string.  Returns "" if the input cannot be parsed so
+// the caller treats it as a signal to skip the row.
 func normalizeDeanDate(s string) string {
+	if s == "" {
+		return ""
+	}
+	// Title-case so "AUGUST 13, 2025" → "August 13, 2025" for time.Parse.
 	// strings.Title is deprecated but correct for ASCII month names. //nolint:staticcheck
 	normalized := strings.Title(strings.ToLower(strings.TrimSpace(s)))
-	for _, layout := range []string{"January 2, 2006", "Jan 2, 2006", "2006-01-02"} {
+	for _, layout := range deanDateLayouts {
 		if t, err := time.Parse(layout, normalized); err == nil {
 			return t.Format("2006-01-02")
 		}
