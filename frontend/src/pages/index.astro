@@ -10,11 +10,31 @@ const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 let auctions: any[] = [];
 let error: string | null = null;
 
+// todayET returns the current calendar date in America/New_York as a
+// comparable string ("YYYY-MM-DD") using the Intl API.
+function todayET(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
+// filterPastAuctions removes auctions whose date has already passed in ET.
+// date strings arrive from the API as "Apr 2, 2026" (Jan 2, 2006 format).
+// Rows with no date are kept — they have no scheduled date, not a past one.
+function filterPastAuctions(list: any[]): any[] {
+  const today = todayET(); // "2026-04-03"
+  return list.filter((a) => {
+    if (!a.date) return true;
+    const parsed = new Date(a.date);
+    if (isNaN(parsed.getTime())) return true; // unparseable → keep
+    // toLocaleDateString('en-CA') gives "YYYY-MM-DD" — safe string compare
+    return parsed.toLocaleDateString('en-CA') >= today;
+  });
+}
+
 try {
   const response = await axios.get(`${apiUrl}/auctions?limit=${LIMIT}&offset=0`, {
     headers: { 'Content-Type': 'application/json' },
   });
-  auctions = response.data.auctions;
+  auctions = filterPastAuctions(response.data.auctions);
 } catch (e) {
   console.error('Error fetching auctions:', e);
   if (e instanceof AxiosError) {
@@ -72,6 +92,38 @@ const hasMore = auctions.length === LIMIT;
 
 <script>
   import '../scripts/main';
+</script>
+
+<script>
+  /**
+   * Browser-side stale-card purge.
+   *
+   * Runs after the DOM is ready so it catches cards that were rendered by
+   * SSR and then served from a CDN cache hours (or days) later.
+   *
+   * Each .auction-card carries a data-date="YYYY-MM-DD" attribute stamped
+   * at render time by Card.astro.  We compare that against today's date in
+   * America/New_York — if the auction date is in the past, the card is
+   * removed from the DOM before the user ever sees it.
+   *
+   * ISO-8601 strings compare correctly as plain strings (lexicographic order
+   * matches chronological order), so no Date parsing is needed here.
+   */
+  document.addEventListener('DOMContentLoaded', () => {
+    const todayET = new Date().toLocaleDateString('en-CA', {
+      timeZone: 'America/New_York',
+    }); // → "2026-04-03"
+
+    document
+      .querySelectorAll<HTMLElement>('.auction-card[data-date]')
+      .forEach((card) => {
+        const d = card.dataset.date;
+        // Empty data-date means no scheduled date — keep the card.
+        if (d && d < todayET) {
+          card.remove();
+        }
+      });
+  });
 </script>
 
 <style>

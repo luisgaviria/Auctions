@@ -71,6 +71,7 @@ const displaySite = formatSiteName(siteName);
   rel="noopener noreferrer"
   class="auction-card"
   aria-label={`View auction: ${address}`}
+  data-date={toISODate(date)}
 >
   <!-- Spotlight overlay — position driven by --mouse-x/--mouse-y via JS -->
   <div class="card-spotlight" aria-hidden="true"></div>

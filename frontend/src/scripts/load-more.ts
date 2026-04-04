@@ -4,6 +4,24 @@ import { checkFavoriteStatus } from './favorites';
 import { appendMapCards } from './map-view';
 import { showToast } from './toast';
 
+// todayET returns today's date in America/New_York as a "YYYY-MM-DD" string.
+function todayET(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
+// filterPastAuctions is a client-side safety net that removes auctions whose
+// date has already passed in Eastern Time.  The API should already exclude
+// them, but this guard prevents stale cached responses from reaching the UI.
+function filterPastAuctions(list: any[]): any[] {
+  const today = todayET();
+  return list.filter((a) => {
+    if (!a.date) return true;
+    const parsed = new Date(a.date);
+    if (isNaN(parsed.getTime())) return true;
+    return parsed.toLocaleDateString('en-CA') >= today;
+  });
+}
+
 export async function loadMore(triggerBtn: HTMLButtonElement): Promise<void> {
   if (state.loading || !state.hasMore) return;
   state.loading = true;
@@ -16,7 +34,7 @@ export async function loadMore(triggerBtn: HTMLButtonElement): Promise<void> {
     const response = await fetch(`${state.apiUrl}/auctions?limit=${state.LIMIT}&offset=${state.offset}`);
     if (!response.ok) throw new Error('Server error');
     const data        = await response.json();
-    const newAuctions: any[] = data.auctions || [];
+    const newAuctions: any[] = filterPastAuctions(data.auctions || []);
 
     const grid = document.getElementById('auctions-grid');
     newAuctions.forEach((a: any) => {
