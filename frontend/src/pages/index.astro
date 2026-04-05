@@ -1,4 +1,6 @@
 ---
+export const prerender = false;
+
 import Layout from '../layouts/Layout.astro';
 import AuctionGrid from '../components/AuctionGrid.astro';
 import MapSplitView from '../components/MapSplitView.astro';
@@ -31,6 +33,7 @@ function filterPastAuctions(list: any[]): any[] {
 }
 
 try {
+  console.log('Fetching auctions from:', apiUrl);
   const response = await axios.get(`${apiUrl}/auctions?limit=${LIMIT}&offset=0`, {
     headers: { 'Content-Type': 'application/json' },
   });
