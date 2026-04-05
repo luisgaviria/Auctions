@@ -1,8 +1,11 @@
 import { defineConfig, fontProviders } from 'astro/config';
 import react from '@astrojs/react';
 import svelte from '@astrojs/svelte';
+import vercel from '@astrojs/vercel';
 
 export default defineConfig({
+  adapter: vercel(),
+  output: 'server',
   integrations: [react(), svelte()],
   build: {
     // Inline all CSS into <style> tags in the HTML, eliminating the two
