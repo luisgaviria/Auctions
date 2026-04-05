@@ -35,7 +35,15 @@ func ScrapPatriot(ctx context.Context) ([]Auction, error) {
 		rawDate = strings.TrimSpace(strings.Split(rawDate, "Continued")[0])
 
 		href, _ := a.Attr("href")
-		fullHref := patriotBase + href
+		// Guard: if the listing anchor has no href (e.g. scrape degraded),
+		// fall back to the Massachusetts auctions index rather than storing
+		// the bare base URL which offers no useful detail for the user.
+		var fullHref string
+		if strings.TrimSpace(href) != "" {
+			fullHref = patriotBase + href
+		} else {
+			fullHref = patriotBase + "/auctions-in-massachusetts/"
+		}
 
 		formattedDate, formattedTime := parseDateAndTimePatriot(rawDate)
 		deposit, status := patriotDetail(ctx, fullHref)

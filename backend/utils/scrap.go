@@ -66,9 +66,18 @@ var easternLoc = func() *time.Location {
 }()
 
 // cleanAddrRe matches boilerplate fragments that scrapers embed in raw address
-// strings: deed-registry citations (B123/P456), and free-text clauses that
-// begin with the keywords Mortgage, Registry, Book, or View property.
-var cleanAddrRe = regexp.MustCompile(`(?i),?\s*(?:B\d+/P\d+\S*|(?:Mortgage|Registry|Book)\b[^,\n]*|View\s*property[^\n]*)`)
+// strings: deed-registry citations (B123/P456), free-text clauses starting
+// with Mortgage/Registry/Book/View property, and parenthetical qualifiers
+// like "(CHESTNUT HILL)" that some scrapers append to city names.
+var cleanAddrRe = regexp.MustCompile(
+	`(?i)` +
+		`\([^)]*\)` + // parenthetical qualifiers, e.g. (CHESTNUT HILL)
+		`|,?\s*(?:B\d+/P\d+\S*` + // deed-registry book/page refs
+		`|(?:Mortgage|Registry|Book)\b[^,\n]*` + // clause keywords
+		`|View\s*property[^\n]*` + // "View property…" trailers
+		`|Pre-?\s*Register[^\n]*` + // "Pre-Register" / "Pre Register"
+		`|AS\s+SCHEDULED[^\n]*)`, // "AS SCHEDULED" status text
+)
 
 // CleanStreetAddress removes boilerplate from a raw scraper address and trims
 // trailing punctuation.  Applied to every auction's Street field before the
@@ -76,6 +85,29 @@ var cleanAddrRe = regexp.MustCompile(`(?i),?\s*(?:B\d+/P\d+\S*|(?:Mortgage|Regis
 func CleanStreetAddress(s string) string {
 	s = cleanAddrRe.ReplaceAllString(s, "")
 	return strings.TrimRight(strings.TrimSpace(s), ",;- ")
+}
+
+// urlJunkRe strips any remaining boilerplate that CleanStreetAddress may not
+// catch when the address is used only for URL generation (not stored in the DB).
+// Handles edge cases like trailing state abbreviations in parentheses.
+var urlJunkRe = regexp.MustCompile(`(?i)\([^)]*\)|\bMA\s*,?\s*MA\b`)
+
+// NormalizeAddressForURL returns a URL-safe version of the address string:
+// parentheticals stripped, known junk phrases removed, commas dropped, and
+// consecutive whitespace collapsed to single spaces.  The result is suitable
+// for path-encoding (replace spaces with "+" or "-" depending on the target).
+//
+// Examples:
+//
+//	"90 SUFFOLK ROAD, NEWTON (CHESTNUT HILL), MA" → "90 SUFFOLK ROAD NEWTON MA"
+//	"59 COCHATO PARK, RANDOLPHPre-Register, MA"  → "59 COCHATO PARK RANDOLPH MA"
+func NormalizeAddressForURL(address string) string {
+	s := cleanAddrRe.ReplaceAllString(address, "")
+	s = urlJunkRe.ReplaceAllString(s, "")
+	s = strings.ReplaceAll(s, ",", "")
+	// Collapse any run of whitespace (gaps left by removed tokens) to one space.
+	s = strings.Join(strings.Fields(s), " ")
+	return strings.TrimSpace(s)
 }
 
 // streetAbbrevs expands common US street-suffix abbreviations to their full
@@ -159,21 +191,20 @@ func normalizeDateToISO(s string) string {
 //
 // Registry URL is looked up from the MA Registry of Deeds map by city.
 func buildAuctionURLs(street, city string) (zillowURL, streetViewURL, registryURL string) {
-	// Build the address tokens, omitting city when blank to avoid "STREET--MA".
-	parts := []string{street}
+	// Build the full address string and sanitize it for use in URLs.
+	// NormalizeAddressForURL strips parentheticals, junk text, and commas so
+	// values like "90 SUFFOLK ROAD, NEWTON (CHESTNUT HILL), MA" become clean.
+	rawFull := street
 	if city != "" {
-		parts = append(parts, city)
+		rawFull += " " + city
 	}
-	parts = append(parts, "MA")
-	joined := strings.Join(parts, " ")
-	// Strip commas, then replace every space with a dash.
-	joined = strings.ReplaceAll(joined, ",", "")
-	joined = strings.ReplaceAll(joined, " ", "-")
-	// Collapse any double-dashes left by multi-space gaps.
-	for strings.Contains(joined, "--") {
-		joined = strings.ReplaceAll(joined, "--", "-")
-	}
-	zillowURL = "https://www.zillow.com/homes/" + joined + "/"
+	rawFull += " MA"
+	clean := NormalizeAddressForURL(rawFull) // "90 SUFFOLK ROAD NEWTON MA"
+
+	// Zillow path format: spaces → "+", no commas, "_rb/" suffix for address search.
+	// Example: https://www.zillow.com/homes/90+SUFFOLK+ROAD+NEWTON+MA_rb/
+	zillowURL = "https://www.zillow.com/homes/" +
+		strings.ReplaceAll(clean, " ", "+") + "_rb/"
 
 	// Google Maps uses standard percent-encoding for the query parameter.
 	mapsQuery := street
