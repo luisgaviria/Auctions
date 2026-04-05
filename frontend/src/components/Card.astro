@@ -11,9 +11,12 @@ interface Props {
   deposit: string;
   siteName: string;
   logo?: string;
+  zillowUrl?: string;
+  streetViewUrl?: string;
+  registryUrl?: string;
 }
 
-const { id, link, date, time: auctionTime, address, city, state, status, deposit, siteName, logo } =
+const { id, link, date, time: auctionTime, address, city, state, status, deposit, siteName, logo, zillowUrl, streetViewUrl, registryUrl } =
   Astro.props;
 
 function toISODate(str: string): string {
@@ -65,14 +68,7 @@ const displayStatus = status || 'On Schedule';
 const displaySite = formatSiteName(siteName);
 ---
 
-<a
-  href={link || '#'}
-  target="_blank"
-  rel="noopener noreferrer"
-  class="auction-card"
-  aria-label={`View auction: ${address}`}
-  data-date={toISODate(date)}
->
+<div class="auction-card" data-date={toISODate(date)}>
   <!-- Spotlight overlay — position driven by --mouse-x/--mouse-y via JS -->
   <div class="card-spotlight" aria-hidden="true"></div>
 
@@ -127,7 +123,40 @@ const displaySite = formatSiteName(siteName);
     </div>
 
   </div>
-</a>
+
+  <!-- Research toolbar: all buttons open URLs in a new tab -->
+  <div class="card-research">
+    {link && (
+      <button type="button" class="research-btn research-btn--auction" title="View auction listing" aria-label="View auction listing"
+        onclick={`window.open('${link}','_blank','noopener,noreferrer')`}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+        <span>Listing</span>
+      </button>
+    )}
+    {zillowUrl && (
+      <button type="button" class="research-btn research-btn--zillow" title="View on Zillow" aria-label="View on Zillow"
+        onclick={`window.open('${zillowUrl}','_blank','noopener,noreferrer')`}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 2L2 9.5l1.5 1L12 4.3l8.5 6.2 1.5-1L12 2zm0 3.8L4 11.5V21h6v-6h4v6h6V11.5L12 5.8z"/></svg>
+        <span>Zillow</span>
+      </button>
+    )}
+    {streetViewUrl && (
+      <button type="button" class="research-btn research-btn--streetview" title="View on Google Maps" aria-label="View on Google Maps"
+        onclick={`window.open('${streetViewUrl}','_blank','noopener,noreferrer')`}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        <span>Maps</span>
+      </button>
+    )}
+    {registryUrl && (
+      <button type="button" class="research-btn research-btn--registry" title="View Registry of Deeds" aria-label="View Registry of Deeds"
+        onclick={`window.open('${registryUrl}','_blank','noopener,noreferrer')`}>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15h8v2H8zm0-4h8v2H8z"/></svg>
+        <span>Registry</span>
+      </button>
+    )}
+  </div>
+
+</div>
 
 <script type="application/ld+json" set:html={schemaJson} />
 
@@ -158,15 +187,13 @@ const displaySite = formatSiteName(siteName);
     border-radius: 12px;
     border: 1px solid var(--color-border);
     background: var(--color-surface);
-    text-decoration: none;
     color: inherit;
     overflow: hidden;
-    transition: border-color 0.2s ease, transform 0.2s ease;
+    transition: border-color 0.2s ease;
   }
 
   .auction-card:hover {
     border-color: var(--color-accent);
-    transform: translateY(-2px);
   }
 
   /* Spotlight element kept in HTML but hidden — no background glow */
@@ -389,4 +416,58 @@ const displaySite = formatSiteName(siteName);
   .auction-card .favorite-btn[data-loading='true'] .fav-spinner { display: block; }
 
   @keyframes fav-spin { to { transform: rotate(360deg); } }
+
+  /* ── Research toolbar — sits outside card-inner, pinned to card bottom ── */
+  .auction-card .card-research {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    padding: 0.75rem 1.375rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .auction-card .research-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    padding: 0.375rem 0.25rem;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .auction-card .research-btn--auction:hover {
+    background: var(--color-accent);
+    color: #fff;
+    border-color: var(--color-accent);
+  }
+
+  .auction-card .research-btn--zillow:hover {
+    background: #006aff;
+    color: #fff;
+    border-color: #006aff;
+  }
+
+  .auction-card .research-btn--streetview:hover {
+    background: #ea4335;
+    color: #fff;
+    border-color: #ea4335;
+  }
+
+  .auction-card .research-btn--registry:hover {
+    background: #1a7340;
+    color: #fff;
+    border-color: #1a7340;
+  }
 </style>

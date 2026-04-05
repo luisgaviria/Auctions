@@ -30,12 +30,43 @@ export function createCardHTML(auction: any): string {
       : '';
   const auctioneerHtml = siteName ? `<span class="auctioneer-label">${siteName}</span>` : '';
 
+  // Research buttons must be <button>, NOT <a>, because nesting <a> inside
+  // the outer auction-card <a> is invalid HTML — the browser auto-closes the
+  // outer anchor, breaking the entire card structure.
+  const safeOpen = (url: string) =>
+    `event.stopPropagation();window.open('${url.replace(/'/g, "\\'")}','_blank','noopener,noreferrer')`;
+
+  const zillowBtn = auction.zillow_url
+    ? `<button type="button" class="research-btn research-btn--zillow" title="View on Zillow" aria-label="View on Zillow" onclick="${safeOpen(auction.zillow_url)}">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 2L2 9.5l1.5 1L12 4.3l8.5 6.2 1.5-1L12 2zm0 3.8L4 11.5V21h6v-6h4v6h6V11.5L12 5.8z"/></svg>
+        <span>Zillow</span>
+      </button>`
+    : '';
+  const streetViewBtn = auction.street_view_url
+    ? `<button type="button" class="research-btn research-btn--streetview" title="View on Google Maps" aria-label="View on Google Maps" onclick="${safeOpen(auction.street_view_url)}">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        <span>Maps</span>
+      </button>`
+    : '';
+  const registryBtn = auction.registry_url
+    ? `<button type="button" class="research-btn research-btn--registry" title="View Registry of Deeds" aria-label="View Registry of Deeds" onclick="${safeOpen(auction.registry_url)}">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15h8v2H8zm0-4h8v2H8z"/></svg>
+        <span>Registry</span>
+      </button>`
+    : '';
+  const listingBtn = auction.link
+    ? `<button type="button" class="research-btn research-btn--auction" title="View auction listing" aria-label="View auction listing" onclick="${safeOpen(auction.link)}">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+        <span>Listing</span>
+      </button>`
+    : '';
+  const toolbarHtml = `<div class="card-research">${listingBtn}${zillowBtn}${streetViewBtn}${registryBtn}</div>`;
+
   return `
-    <a href="#"
-       class="auction-card map-trigger-card"
-       data-auction-id="${auction.id}"
-       data-link="${safeLink}"
-       aria-label="Fly to auction: ${safeAddress}">
+    <div class="auction-card map-trigger-card"
+         data-auction-id="${auction.id}"
+         data-link="${safeLink}"
+         aria-label="Auction: ${safeAddress}">
       <div class="card-spotlight" aria-hidden="true"></div>
       <div class="card-inner">
         <div class="card-header">
@@ -75,5 +106,6 @@ export function createCardHTML(auction: any): string {
           </button>
         </div>
       </div>
-    </a>`;
+      ${toolbarHtml}
+    </div>`;
 }

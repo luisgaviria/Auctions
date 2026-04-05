@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -24,20 +25,24 @@ import (
 // does not overwrite a good date already stored in the DB.
 var upsertAuctionSQL = `
 	INSERT INTO auctions
-		(address, city, state, time, logo, site_name, status, link, date, deposit, lat, lng, last_seen)
+		(address, city, state, time, logo, site_name, status, link, date, deposit, lat, lng,
+		 zillow_url, street_view_url, registry_url, last_seen)
 	VALUES
-		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
 	ON CONFLICT ON CONSTRAINT uq_auctions_address_site DO UPDATE
 		SET
-			status     = CASE WHEN auctions.status  IS DISTINCT FROM EXCLUDED.status
-			                  THEN EXCLUDED.status  ELSE auctions.status  END,
-			date       = COALESCE(EXCLUDED.date, auctions.date),
-			deposit    = CASE WHEN auctions.deposit IS DISTINCT FROM EXCLUDED.deposit
-			                  THEN EXCLUDED.deposit ELSE auctions.deposit END,
-			time       = EXCLUDED.time,
-			link       = EXCLUDED.link,
-			last_seen  = EXCLUDED.last_seen,
-			updated_at = NOW()
+			status          = CASE WHEN auctions.status  IS DISTINCT FROM EXCLUDED.status
+			                       THEN EXCLUDED.status  ELSE auctions.status  END,
+			date            = COALESCE(EXCLUDED.date, auctions.date),
+			deposit         = CASE WHEN auctions.deposit IS DISTINCT FROM EXCLUDED.deposit
+			                       THEN EXCLUDED.deposit ELSE auctions.deposit END,
+			time            = EXCLUDED.time,
+			link            = EXCLUDED.link,
+			zillow_url      = EXCLUDED.zillow_url,
+			street_view_url = EXCLUDED.street_view_url,
+			registry_url    = EXCLUDED.registry_url,
+			last_seen       = EXCLUDED.last_seen,
+			updated_at      = NOW()
 	RETURNING id;`
 
 // sweepStaleSQL hard-deletes rows that have not been seen by any scraper in the
@@ -138,6 +143,31 @@ func normalizeDateToISO(s string) string {
 	return s
 }
 
+// buildAuctionURLs populates the three generated URL fields for an auction.
+//
+// Zillow search URL format:
+//
+//	https://www.zillow.com/homes/STREET,_CITY,_MA_rb/
+//
+// Google Maps "Search" URL (no API key required, opens the search result):
+//
+//	https://www.google.com/maps/search/?api=1&query=STREET,+CITY,+MA
+//
+// Registry URL is looked up from the MA Registry of Deeds map by city.
+func buildAuctionURLs(street, city string) (zillowURL, streetViewURL, registryURL string) {
+	// Zillow uses path encoding: spaces → underscores, commas are literal.
+	// Example: "47 FOSS ROAD, GARDNER, MA" → "47_FOSS_ROAD,_GARDNER,_MA"
+	zillowQuery := strings.ReplaceAll(street+", "+city+", MA", " ", "_")
+	zillowURL = "https://www.zillow.com/homes/" + zillowQuery + "_rb/"
+
+	// Google Maps uses standard percent-encoding for the query parameter.
+	streetViewURL = "https://www.google.com/maps/search/?api=1&query=" +
+		url.QueryEscape(street+", "+city+", MA")
+
+	registryURL = GetRegistryURL(city)
+	return
+}
+
 // NormalizeAuction applies every address-cleaning and normalization step in
 // one place so the result is identical whether called from ScrapAllSites,
 // DryRunCFScrapers, or any future caller.  The returned copy is safe to pass
@@ -149,6 +179,7 @@ func NormalizeAuction(a sites.Auction) sites.Auction {
 	a.Date = normalizeDateToISO(a.Date)
 	a.Status = normalizeStatus(a.Status)
 	a.Time = normalizeTime(a.Time)
+	a.ZillowURL, a.StreetViewURL, a.RegistryURL = buildAuctionURLs(a.Street, a.City)
 	return a
 }
 
@@ -273,18 +304,21 @@ func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 
 	var id int
 	err := db.QueryRowContext(ctx, upsertAuctionSQL,
-		a.Street,
-		a.City,
-		"Massachusetts",
-		a.Time,
-		a.Logo,
-		a.SiteName,
-		a.Status,
-		a.Url,
-		dateParam,
-		a.Deposit,
-		"0",
-		"0",
+		a.Street,       // $1  address
+		a.City,         // $2  city
+		"Massachusetts", // $3  state
+		a.Time,         // $4  time
+		a.Logo,         // $5  logo
+		a.SiteName,     // $6  site_name
+		a.Status,       // $7  status
+		a.Url,          // $8  link
+		dateParam,      // $9  date
+		a.Deposit,      // $10 deposit
+		"0",            // $11 lat
+		"0",            // $12 lng
+		a.ZillowURL,    // $13 zillow_url
+		a.StreetViewURL, // $14 street_view_url
+		a.RegistryURL,  // $15 registry_url
 	).Scan(&id)
 	if err != nil {
 		log.Printf("[upsert] error for %q (%s): %v", a.Street, a.SiteName, err)
@@ -387,6 +421,50 @@ func purgePastAuctions(ctx context.Context, db *sql.DB) {
 	log.Printf("[purge] deleted %d past auctions (any-format, ET-aware)", n)
 }
 
+// backfillMissingURLs finds existing auction rows that have NULL zillow_url or
+// registry_url (rows inserted before the URL columns were added, or before the
+// normalization pipeline populated them) and generates + saves the URLs.
+// This runs at the start of every scrape so no manual migration is needed.
+func backfillMissingURLs(ctx context.Context, db *sql.DB) {
+	const sel = `
+		SELECT id, address, city FROM auctions
+		WHERE zillow_url IS NULL OR registry_url IS NULL`
+	rows, err := db.QueryContext(ctx, sel)
+	if err != nil {
+		log.Printf("[backfill] query error: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type row struct {
+		id      int
+		address string
+		city    string
+	}
+	var toFix []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.address, &r.city); err == nil {
+			toFix = append(toFix, r)
+		}
+	}
+	rows.Close()
+
+	fixed := 0
+	for _, r := range toFix {
+		zillow, streetView, registry := buildAuctionURLs(r.address, r.city)
+		_, err := db.ExecContext(ctx,
+			`UPDATE auctions SET zillow_url=$1, street_view_url=$2, registry_url=$3 WHERE id=$4`,
+			zillow, streetView, registry, r.id)
+		if err != nil {
+			log.Printf("[backfill] update id=%d: %v", r.id, err)
+		} else {
+			fixed++
+		}
+	}
+	log.Printf("[backfill] populated URLs for %d/%d auctions", fixed, len(toFix))
+}
+
 // scraperDef pairs a canonical site name with a context-aware scraper function.
 // fallbackURL is non-empty for CF-based scrapers; it is used to re-fetch HTML
 // for the AI self-healing fallback when the scraper returns 0 results.
@@ -463,7 +541,7 @@ func aiRescueFetchHTML(ctx context.Context, siteName, url string) string {
 	log.Printf("[AI_HEAL] plain http.Get url=%s", url)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err == nil {
-		client := &http.Client{Timeout: 60 * time.Second}
+		client := &http.Client{Timeout: 120 * time.Second}
 		resp, err := client.Do(req)
 		if err == nil {
 			body, _ := io.ReadAll(resp.Body)
@@ -493,6 +571,7 @@ func aiRescueFetchHTML(ctx context.Context, siteName, url string) string {
 func DryRunCFScrapers(ctx context.Context, db *sql.DB) {
 	migrateNonISODates(ctx, db)
 	purgePastAuctions(ctx, db)
+	backfillMissingURLs(ctx, db)
 
 	targets := []scraperDef{
 		{"baystate", sites.ScrapBaystate, "https://www.baystateauction.com/auctions/"},
@@ -543,6 +622,8 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 	migrateNonISODates(ctx, db)
 	// 2. Remove any row whose date has already passed (ET-aware).
 	purgePastAuctions(ctx, db)
+	// 3. Populate URL columns for any rows that predate the URL feature.
+	backfillMissingURLs(ctx, db)
 
 	scrapers := []scraperDef{
 		// Cloudflare-migrated scrapers (context-aware, no local Chrome)

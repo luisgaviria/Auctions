@@ -144,12 +144,14 @@ func CFetch(ctx context.Context, targetURL string) (string, error) {
 }
 
 // pollCFJob polls GET /crawl/{id} until the job status is "completed",
-// an error status is returned, or the context / 150-second deadline fires.
+// an error status is returned, or the context / 300-second deadline fires.
+// 300 s is required by scrapers like Patriot that issue N+1 detail fetches
+// through CF Browser Rendering; 150 s was too short for their full run.
 func pollCFJob(ctx context.Context, accountID, token, jobID string) (string, error) {
 	pollURL := fmt.Sprintf(cfJobEndpoint, accountID, jobID)
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
-	deadline := time.After(150 * time.Second)
+	deadline := time.After(300 * time.Second)
 	client := &http.Client{Timeout: 15 * time.Second}
 
 	for {
@@ -157,7 +159,7 @@ func pollCFJob(ctx context.Context, accountID, token, jobID string) (string, err
 		case <-ctx.Done():
 			return "", fmt.Errorf("cf job %s: %w", jobID, ctx.Err())
 		case <-deadline:
-			return "", fmt.Errorf("cf job %s timed out after 150s", jobID)
+			return "", fmt.Errorf("cf job %s timed out after 300s", jobID)
 		case <-ticker.C:
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, pollURL, nil)
 			if err != nil {

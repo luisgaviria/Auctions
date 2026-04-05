@@ -84,17 +84,30 @@ func patriotDetail(ctx context.Context, url string) (deposit, status string) {
 		return "", "On Schedule"
 	}
 
-	// Look for deposit in .auction-terms first (most reliable), then fall back
-	// to the old nth-child selector. Extract the first $X,XXX dollar amount found.
+	// Extract the first $X,XXX dollar amount from the detail page.
+	// Try selectors from most-specific to least-specific so a site redesign
+	// degrades gracefully rather than returning an empty deposit.
 	dollarRe := regexp.MustCompile(`\$[0-9,]+`)
-	termsText := doc.Find(".auction-terms").Text()
-	if termsText == "" {
-		termsText = doc.Find(
-			"#calendar > div:nth-child(2) > div > div.col-md-4 > div:nth-child(3) > p",
-		).Text()
+	candidateSelectors := []string{
+		".auction-terms",
+		".auction-details",
+		".terms",
+		"#calendar > div:nth-child(2) > div > div.col-md-4 > div:nth-child(3) > p",
+		"#calendar > div:nth-child(2) > div > div.col-md-4",
+		".col-md-4",
 	}
-	if m := dollarRe.FindString(termsText); m != "" {
-		deposit = m
+	for _, sel := range candidateSelectors {
+		text := doc.Find(sel).Text()
+		if m := dollarRe.FindString(text); m != "" {
+			deposit = m
+			break
+		}
+	}
+	// Last resort: scan the entire document for any dollar amount.
+	if deposit == "" {
+		if m := dollarRe.FindString(doc.Text()); m != "" {
+			deposit = m
+		}
 	}
 
 	status = strings.TrimSpace(doc.Find(

@@ -29,6 +29,9 @@ const { auctions, hasMore } = Astro.props;
           status={auction.status}
           deposit={auction.deposit}
           siteName={auction.site_name}
+          zillowUrl={auction.zillow_url}
+          streetViewUrl={auction.street_view_url}
+          registryUrl={auction.registry_url}
         />
       ))
     )}

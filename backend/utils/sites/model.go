@@ -3,15 +3,18 @@ package sites
 import "fmt"
 
 type Auction struct {
-	Date     string
-	Time     string
-	Street   string
-	City     string
-	Deposit  string
-	Status   string
-	Logo     string
-	Url      string
-	SiteName string // identifies the source scraper, e.g. "baystate"
+	Date        string
+	Time        string
+	Street      string
+	City        string
+	Deposit     string
+	Status      string
+	Logo        string
+	Url         string
+	SiteName    string // identifies the source scraper, e.g. "baystate"
+	ZillowURL   string
+	StreetViewURL string
+	RegistryURL string
 }
 
 func (auction *Auction) Print() {

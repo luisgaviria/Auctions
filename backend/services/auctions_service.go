@@ -28,7 +28,8 @@ type GetAuctionsResponse struct {
 // columns instead of SELECT * means adding new DB columns (e.g. last_seen)
 // never breaks the scan regardless of migration order across environments.
 const auctionCols = `id, address, city, state, time, logo, status, link,
-	date, deposit, lat, lng, "createdAt", site_name, updated_at, last_seen`
+	date, deposit, lat, lng, "createdAt", site_name, updated_at, last_seen,
+	zillow_url, street_view_url, registry_url`
 
 // selectFilteredAuctions excludes terminal/past statuses, drops past-dated rows,
 // and sorts upcoming auctions chronologically.
@@ -95,6 +96,9 @@ func (s *AuctionsService) GetAuctions(limit, offset int) ([]byte, int, error) {
 			&auction.SiteName,
 			&auction.UpdatedAt,
 			&auction.LastSeen,
+			&auction.ZillowURL,
+			&auction.StreetViewURL,
+			&auction.RegistryURL,
 		); err != nil {
 			log.Printf("Error scanning auction: %v\n", err)
 			return nil, http.StatusInternalServerError, err
@@ -149,6 +153,9 @@ func (s *AuctionsService) GetAuctionsInBounds(south, north, west, east float64) 
 			&auction.SiteName,
 			&auction.UpdatedAt,
 			&auction.LastSeen,
+			&auction.ZillowURL,
+			&auction.StreetViewURL,
+			&auction.RegistryURL,
 		); err != nil {
 			log.Printf("Error scanning auction (bbox): %v\n", err)
 			return nil, http.StatusInternalServerError, err
