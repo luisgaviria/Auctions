@@ -147,7 +147,11 @@ func normalizeDateToISO(s string) string {
 //
 // Zillow search URL format:
 //
-//	https://www.zillow.com/homes/STREET,_CITY,_MA_rb/
+//	https://www.zillow.com/homes/STREET-CITY-MA/
+//
+// Spaces are replaced with dashes, commas are stripped, and the city is only
+// appended when non-empty so an unknown city never produces a double-dash.
+// Example: "91 GENEVA AVE", "DORCHESTER" → "91-GENEVA-AVE-DORCHESTER-MA"
 //
 // Google Maps "Search" URL (no API key required, opens the search result):
 //
@@ -155,14 +159,30 @@ func normalizeDateToISO(s string) string {
 //
 // Registry URL is looked up from the MA Registry of Deeds map by city.
 func buildAuctionURLs(street, city string) (zillowURL, streetViewURL, registryURL string) {
-	// Zillow uses path encoding: spaces → underscores, commas are literal.
-	// Example: "47 FOSS ROAD, GARDNER, MA" → "47_FOSS_ROAD,_GARDNER,_MA"
-	zillowQuery := strings.ReplaceAll(street+", "+city+", MA", " ", "_")
-	zillowURL = "https://www.zillow.com/homes/" + zillowQuery + "_rb/"
+	// Build the address tokens, omitting city when blank to avoid "STREET--MA".
+	parts := []string{street}
+	if city != "" {
+		parts = append(parts, city)
+	}
+	parts = append(parts, "MA")
+	joined := strings.Join(parts, " ")
+	// Strip commas, then replace every space with a dash.
+	joined = strings.ReplaceAll(joined, ",", "")
+	joined = strings.ReplaceAll(joined, " ", "-")
+	// Collapse any double-dashes left by multi-space gaps.
+	for strings.Contains(joined, "--") {
+		joined = strings.ReplaceAll(joined, "--", "-")
+	}
+	zillowURL = "https://www.zillow.com/homes/" + joined + "/"
 
 	// Google Maps uses standard percent-encoding for the query parameter.
+	mapsQuery := street
+	if city != "" {
+		mapsQuery += ", " + city
+	}
+	mapsQuery += ", MA"
 	streetViewURL = "https://www.google.com/maps/search/?api=1&query=" +
-		url.QueryEscape(street+", "+city+", MA")
+		url.QueryEscape(mapsQuery)
 
 	registryURL = GetRegistryURL(city)
 	return
