@@ -79,11 +79,28 @@ var cleanAddrRe = regexp.MustCompile(
 		`|AS\s+SCHEDULED[^\n]*)`, // "AS SCHEDULED" status text
 )
 
+// gluedDateRe matches a month name glued directly onto a state abbreviation
+// with no space — e.g. "MAApr" or "MAJan".  DanielP's <a> element text
+// concatenates the auction date onto the address without a separator.
+// The replacement keeps only the state abbreviation (group $1).
+var gluedDateRe = regexp.MustCompile(
+	`(?i)(MA|MASSACHUSETTS)(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*[\s,\d]*`,
+)
+
 // CleanStreetAddress removes boilerplate from a raw scraper address and trims
 // trailing punctuation.  Applied to every auction's Street field before the
 // DB upsert so no scraper-specific caller needs to handle it.
 func CleanStreetAddress(s string) string {
+	// 1. Strip glued date text after state abbreviation (DanielP scraper).
+	//    "90 SUFFOLK ROAD, NEWTON , MAApr 7, 2026" → "90 SUFFOLK ROAD, NEWTON , MA"
+	s = gluedDateRe.ReplaceAllString(s, "$1")
+
+	// 2. Strip other boilerplate (parentheticals, deed refs, junk phrases).
 	s = cleanAddrRe.ReplaceAllString(s, "")
+
+	// 3. Collapse space-before-comma: "NEWTON , MA" → "NEWTON, MA"
+	s = regexp.MustCompile(`\s+,`).ReplaceAllString(s, ",")
+
 	return strings.TrimRight(strings.TrimSpace(s), ",;- ")
 }
 
@@ -335,15 +352,19 @@ func isElapsedToday(dateStr, timeStr string) bool {
 // upsertAuction writes a single already-normalised auction to the DB.
 // Callers must run NormalizeAuction before calling this function.
 func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
-	// Skip auctions whose date has already passed.
+	// Skip auctions whose date has already passed (strictly before today in ET).
+	// Same-day auctions whose time has elapsed are kept: we still upsert them
+	// so that last_seen is refreshed on every scrape run. Without this, the
+	// 6-hour sweep would delete a 9 AM auction by 3 PM simply because the
+	// afternoon scraper skipped updating last_seen. The midnight ET SQL purge
+	// (purgePastAuctions) is the correct place to remove yesterday's rows.
 	if isPastDate(a.Date) {
 		log.Printf("[upsert] skipping past date addr=%q site=%s date=%s", a.Street, a.SiteName, a.Date)
 		return
 	}
-	// Skip same-day auctions whose start time has already passed in ET.
+	// Log elapsed same-day auctions for visibility but do NOT skip the upsert.
 	if isElapsedToday(a.Date, a.Time) {
-		log.Printf("[upsert] skipping elapsed auction addr=%q site=%s date=%s time=%s", a.Street, a.SiteName, a.Date, a.Time)
-		return
+		log.Printf("[upsert] elapsed today (still saving) addr=%q site=%s date=%s time=%s", a.Street, a.SiteName, a.Date, a.Time)
 	}
 
 	// Pass nil for empty date strings so the DB receives SQL NULL rather than

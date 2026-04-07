@@ -38,7 +38,12 @@ func ScrapDanielP() []Auction {
 	c.OnHTML("html", func(e *colly.HTMLElement) {
 		e.ForEach("#dnn_ctr376_ModuleContent > div", func(i int, divElement *colly.HTMLElement) {
 			if i != 0 {
-				address := divElement.DOM.Children().Find("a").Text()
+				// Clone the anchor and strip child elements (e.g. <b> containing
+				// the date) before reading text.  Without this, .Text() returns
+				// the full concatenated string "90 SUFFOLK ROAD, NEWTON , MAApr 7, 2026".
+				aClone := divElement.DOM.Children().Find("a").Clone()
+				aClone.Find("b, span, div").Remove()
+				address := strings.TrimSpace(aClone.Text())
 
 				var propertyType string
 				var status string
