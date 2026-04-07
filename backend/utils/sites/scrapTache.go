@@ -1,7 +1,6 @@
 package sites
 
 import (
-	"fmt"
 	"log"
 	"strings"
 
@@ -49,7 +48,7 @@ func ScrapTache() []Auction {
 			status := tds.Eq(6).Text()
 			deposit := tds.Eq(7).Text()
 
-			fmt.Println(zip)
+			_ = zip // zip is scraped but not stored; suppress unused-variable error
 
 			fullAddress := address + " " + city + ", " + state
 
@@ -74,7 +73,7 @@ func ScrapTache() []Auction {
 
 	err := c.Visit(url)
 	if err != nil {
-		fmt.Println(err)
+		log.Printf("[tache] visit error: %v", err)
 	}
 
 	return data

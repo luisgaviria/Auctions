@@ -22,7 +22,7 @@ import (
 )
 
 func main() {
-	fmt.Println("🚀 CONNECTION SUCCESSFUL - STARTING SCRAPERS")
+	log.Println("[dryrun] starting scrapers")
 	if os.Getenv("ENV") != "PROD" {
 		if err := godotenv.Load(); err != nil {
 			log.Fatal("error loading .env file")

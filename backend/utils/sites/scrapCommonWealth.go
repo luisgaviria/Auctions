@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -44,20 +45,49 @@ func extractCommonHref(links string) string {
 	return links[start : start+end]
 }
 
-// splitCommonLocation splits a raw Location string like "2084 Washington Street Newton"
-// into a street and city.  Commonwealth appends the city as the last whitespace-
-// separated token, so we split on the final space.
+// commonZipRe matches a trailing US zip code (5 digits, optionally +4).
+var commonZipRe = regexp.MustCompile(`\s+\d{5}(?:-\d{4})?$`)
+
+// cleanCommonLocation sanitizes a raw Location string from the Commonwealth
+// AJAX response before street/city splitting:
+//
+//  1. Replaces pipe characters (|) with ", " — some rows use "|" as a field
+//     separator inside the location string.
+//  2. Strips A/K/A aliases — keeps only the primary address (the part before
+//     "A/K/A" or "AKA"), discarding the secondary identifier.
+//  3. Strips trailing zip codes (e.g. "Newton 02458" → "Newton") so the
+//     last-token city extraction does not return a zip code as the city name.
+func cleanCommonLocation(loc string) string {
+	// 1. Pipes → ", "
+	loc = strings.ReplaceAll(loc, "|", ", ")
+
+	// 2. Strip A/K/A alias — keep primary address only.
+	if idx := strings.Index(strings.ToUpper(loc), "A/K/A"); idx != -1 {
+		loc = loc[:idx]
+	} else if idx := strings.Index(strings.ToUpper(loc), " AKA "); idx != -1 {
+		loc = loc[:idx]
+	}
+
+	// 3. Strip trailing zip code.
+	loc = commonZipRe.ReplaceAllString(loc, "")
+
+	return strings.TrimRight(strings.TrimSpace(loc), ", ")
+}
+
+// splitCommonLocation cleans then splits a raw Location string like
+// "2084 Washington Street Newton" into a street and city.
+// Commonwealth appends the city as the last whitespace-separated token,
+// so we split on the final space after sanitization.
 func splitCommonLocation(location string) (street, city string) {
 	if location == "" {
 		return "", ""
 	}
-	loc := strings.TrimSpace(location)
+	loc := cleanCommonLocation(location)
 	if loc == "" {
 		return "", ""
 	}
 	i := strings.LastIndex(loc, " ")
 	if i <= 0 {
-		// Single token or space at position 0 — treat whole string as street.
 		return loc, ""
 	}
 	return strings.TrimSpace(loc[:i]), strings.TrimSpace(loc[i+1:])

@@ -1,7 +1,7 @@
 package sites
 
 import (
-	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -38,7 +38,7 @@ func ScrapJake() []Auction {
 			if err != nil {
 				dateParsed, err = time.Parse("Monday January 2, 2006", strings.TrimSpace(strings.Split(date, "AT")[0]))
 				if err != nil {
-					fmt.Println(err)
+					log.Printf("[jake] date parse error: %v", err)
 					return
 				}
 			}
