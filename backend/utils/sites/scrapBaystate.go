@@ -36,18 +36,37 @@ func extractStatus(date string) string {
 	return ""
 }
 
-// cleanDate strips any inline HTML status markup and reformats the date to YYYY-MM-DD.
-func cleanDate(date string) string {
-	parts := strings.Split(date, " <s")
-	if len(parts) > 0 {
-		date = parts[0]
+// parseBaystateDateTime extracts date (YYYY-MM-DD) and time (e.g. "10:00 AM")
+// from a raw Baystate date string that may contain trailing HTML status markup.
+// Example input: "Thursday, April 09, 2026 @ 10:00 am <span ...>CANCELLED</span>"
+func parseBaystateDateTime(raw string) (date, timeStr string) {
+	// Drop everything from the first HTML tag onward.
+	if idx := strings.Index(raw, "<"); idx != -1 {
+		raw = raw[:idx]
 	}
-	date = strings.ReplaceAll(date, "at", "@")
-	parsedDate, err := time.Parse("Jan 2, 2006 @ 3:04PM", date)
-	if err == nil {
-		return parsedDate.Format("2006-01-02")
+	raw = strings.TrimSpace(raw)
+
+	// Normalise lowercase am/pm → AM/PM (Go's time layout is case-sensitive).
+	switch {
+	case strings.HasSuffix(raw, " am"):
+		raw = raw[:len(raw)-3] + " AM"
+	case strings.HasSuffix(raw, " pm"):
+		raw = raw[:len(raw)-3] + " PM"
 	}
-	return date
+
+	// Primary format: "Thursday, April 09, 2026 @ 10:00 AM"
+	if t, err := time.Parse("Monday, January 02, 2006 @ 3:04 PM", raw); err == nil {
+		return t.Format("2006-01-02"), t.Format("3:04 PM")
+	}
+
+	// Fallback: date only, no time component.
+	if idx := strings.Index(raw, " @ "); idx != -1 {
+		if t, err := time.Parse("Monday, January 02, 2006", raw[:idx]); err == nil {
+			return t.Format("2006-01-02"), ""
+		}
+	}
+
+	return raw, ""
 }
 
 // ScrapBaystate fetches baystateauction.com via Cloudflare Browser Rendering,
@@ -98,7 +117,7 @@ func ScrapBaystate(ctx context.Context) ([]Auction, error) {
 		} else {
 			record.Status = "On Schedule"
 		}
-		record.Date = cleanDate(record.Date)
+		parsedDate, parsedTime := parseBaystateDateTime(record.Date)
 
 		auctions = append(auctions, Auction{
 			SiteName: "baystate",
@@ -106,8 +125,8 @@ func ScrapBaystate(ctx context.Context) ([]Auction, error) {
 			Logo:     logo,
 			Street:   record.Address,
 			City:     record.City,
-			Date:     record.Date,
-			Time:     time.Now().Format("15:04"),
+			Date:     parsedDate,
+			Time:     parsedTime,
 			Status:   record.Status,
 			Deposit:  record.Deposit,
 		})
