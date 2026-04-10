@@ -27,6 +27,19 @@ export function populateMapCards(auctionList: any[]): void {
   setContents(drawerList, html);
 }
 
+export function showMarkerDetailSheet(auction: any): void {
+  const sheet = document.getElementById('marker-detail-sheet');
+  const cardEl = document.getElementById('marker-detail-card');
+  if (!sheet || !cardEl) return;
+  cardEl.innerHTML = createCardHTML(auction);
+  sheet.dataset.state = 'visible';
+}
+
+export function hideMarkerDetailSheet(): void {
+  const sheet = document.getElementById('marker-detail-sheet');
+  if (sheet) sheet.dataset.state = 'hidden';
+}
+
 export function appendMapCards(newAuctions: any[]): void {
   const html = newAuctions.map(createCardHTML).join('');
   [document.getElementById('map-card-list'), document.getElementById('drawer-card-list')]

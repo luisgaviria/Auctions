@@ -78,14 +78,26 @@
       `);
 
       el.addEventListener('click', () => {
-        if (activePopup) activePopup.remove();
-        popup.setLngLat(lngLat).addTo(map);
-        activePopup = popup;
+        const isMobile = window.innerWidth < 768;
 
-        // Notify the sidebar so it can scroll to and highlight the matching card.
+        // Always fly to the tapped marker so it's centred on screen.
+        map.flyTo({ center: lngLat, zoom: Math.max(map.getZoom(), 14), duration: 500 });
+
+        if (isMobile) {
+          // On mobile: skip the MapLibre popup and let the bottom sheet handle
+          // the detail view instead.
+          if (activePopup) { activePopup.remove(); activePopup = null; }
+        } else {
+          if (activePopup) activePopup.remove();
+          popup.setLngLat(lngLat).addTo(map);
+          activePopup = popup;
+        }
+
+        // Notify the sidebar/sheet — include the full auction object so the
+        // mobile sheet can render a complete card without a second fetch.
         mapContainer.dispatchEvent(new CustomEvent('markerclick', {
           bubbles: true,
-          detail: { id: auction.id },
+          detail: { id: auction.id, auction },
         }));
       });
 
@@ -211,9 +223,12 @@
     });
 
     map.on('click', (e) => {
-      if (!e.originalEvent.target.closest('.map-marker') && activePopup) {
-        activePopup.remove();
-        activePopup = null;
+      if (!e.originalEvent.target.closest('.map-marker')) {
+        if (activePopup) { activePopup.remove(); activePopup = null; }
+        // On mobile, dismiss the detail sheet when tapping the map background.
+        if (window.innerWidth < 768) {
+          mapContainer.dispatchEvent(new CustomEvent('closemarkersheet', { bubbles: true }));
+        }
       }
     });
 

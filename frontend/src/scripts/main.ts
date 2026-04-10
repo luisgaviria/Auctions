@@ -2,7 +2,7 @@ import { initState, state } from './state';
 import { checkFavoriteStatus, initFavoritesClickHandler } from './favorites';
 import { loadMore } from './load-more';
 import { initDrawer } from './drawer';
-import { populateMapCards, setView } from './map-view';
+import { populateMapCards, setView, showMarkerDetailSheet, hideMarkerDetailSheet } from './map-view';
 
 // Hydrate shared state from the hidden #page-config element before anything else.
 initState();
@@ -38,15 +38,20 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   });
 
-  // Marker click → scroll & highlight matching sidebar card.
+  // Marker click → mobile: show detail sheet; desktop: scroll & highlight sidebar card.
   document.getElementById('split-right')?.addEventListener('markerclick', (e: Event) => {
-    const id = (e as CustomEvent).detail?.id;
-    console.log('Interaction Target:', id);
+    const detail = (e as CustomEvent).detail;
+    const id = detail?.id;
     if (!id) return;
+
+    if (window.innerWidth < 768) {
+      if (detail.auction) showMarkerDetailSheet(detail.auction);
+      return;
+    }
+
     const card = document.querySelector<HTMLElement>(
-      `.map-trigger-card[data-auction-id="${id}"], .map-trigger-card[data-auction-id='${id}']`
+      `.map-trigger-card[data-auction-id="${id}"]`
     );
-    console.log('Card found for highlight:', !!card);
     if (!card) return;
     setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'center' }), 10);
     card.classList.remove('is-active-highlight');
@@ -54,6 +59,10 @@ document.addEventListener('DOMContentLoaded', () => {
     card.classList.add('is-active-highlight');
     setTimeout(() => card.classList.remove('is-active-highlight'), 2000);
   });
+
+  // Close marker detail sheet via button or map background tap.
+  document.getElementById('marker-detail-close')?.addEventListener('click', hideMarkerDetailSheet);
+  document.getElementById('split-right')?.addEventListener('closemarkersheet', hideMarkerDetailSheet);
 
   // Bbox search results → refresh sidebar cards.
   document.getElementById('split-right')?.addEventListener('auctionresultschange', (e: Event) => {
