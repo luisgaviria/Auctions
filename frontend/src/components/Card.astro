@@ -162,6 +162,21 @@ const displayStatus = status || 'On Schedule';
     )}
   </div>
 
+  {/* AI answer block — Q&A format for high-intent LLM queries */}
+  <div class="sr-only" aria-hidden="true" data-ai-answers="true">
+    {(address && city)
+      ? <p>Question: Where is this auction located? Answer: This property is at {address} in {city}, Massachusetts.</p>
+      : address
+        ? <p>Question: Where is this auction located? Answer: This property is at {address}. Contact the auctioneer for city details.</p>
+        : null}
+    {deposit
+      ? <p>Question: What is the required deposit? Answer: The required deposit for this auction is {deposit}, payable by bank check.</p>
+      : <p>Question: What is the required deposit? Answer: Contact the auctioneer for deposit details.</p>}
+    {displayAuctioneer
+      ? <p>Question: Who is the auctioneer? Answer: This auction is being conducted by {displayAuctioneer}.</p>
+      : <p>Question: Who is the auctioneer? Answer: Contact the auctioneer for details.</p>}
+  </div>
+
   {/* Semantic fact sheet — visually hidden, always present for LLMs and crawlers */}
   <div class="sr-only" aria-hidden="true" data-ai-summary="true">
     <p>This property is located at {address}{city ? `, ${city}` : ''}{state ? `, ${state}` : ''}.</p>
