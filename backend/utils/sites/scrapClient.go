@@ -2,10 +2,15 @@ package sites
 
 import (
 	"log"
+	"regexp"
 	"strings"
 
 	"github.com/gocolly/colly"
 )
+
+// amgDepositRe matches a dollar amount immediately before the word "deposit",
+// e.g. "$5,000.00 deposit shall be paid".  The capture group is the amount.
+var amgDepositRe = regexp.MustCompile(`(\$[\d,]+(?:\.\d{2})?)\s+deposit`)
 
 // ScrapeAuctionDetails scrapes a single auction detail page.
 func scrapAuctionDetails(baseURL, detailURL string, auction *Auction) error { // Modified signature
@@ -62,13 +67,20 @@ func scrapAuctionDetails(baseURL, detailURL string, auction *Auction) error { //
 			if text == "" {
 				return
 			}
-			//Special case for Deposit
+			// Special case for Deposit: only parse inside the Terms: paragraph.
 			if strings.Contains(text, "Terms:") && strings.Contains(text, "$") {
-				parts := strings.SplitN(text, "$", 2) //split by $
-				if len(parts) > 1 {
-					depositPart := strings.SplitN(parts[1], " ", 2)[0] // separate the number
-					auction.Deposit = "$" + depositPart
-					text = strings.ReplaceAll(text, "$"+depositPart, "") //Remove it
+				// Prefer the amount that explicitly precedes the word "deposit"
+				// (e.g. "A $5,000.00 deposit shall be paid") so we don't
+				// accidentally pick up tax assessments or other dollar values
+				// that appear earlier in the same paragraph.
+				if m := amgDepositRe.FindStringSubmatch(text); len(m) > 1 {
+					auction.Deposit = m[1]
+				} else {
+					// Fallback: first dollar amount in the Terms block.
+					parts := strings.SplitN(text, "$", 2)
+					if len(parts) > 1 {
+						auction.Deposit = "$" + strings.SplitN(parts[1], " ", 2)[0]
+					}
 				}
 			}
 
