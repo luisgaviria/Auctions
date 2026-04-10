@@ -11,20 +11,15 @@ function setContents(container: HTMLElement | null, html: string): void {
 }
 
 export function populateMapCards(auctionList: any[]): void {
-  const mapList    = document.getElementById('map-card-list');
-  const drawerList = document.getElementById('drawer-card-list');
-  if (!mapList && !drawerList) return;
+  const mapList = document.getElementById('map-card-list');
+  if (!mapList) return;
 
   if (!auctionList || auctionList.length === 0) {
-    const empty = '<p class="sidebar-empty">No auctions found in this area.</p>';
-    if (mapList)    mapList.innerHTML    = empty;
-    if (drawerList) drawerList.innerHTML = empty;
+    mapList.innerHTML = '<p class="sidebar-empty">No auctions found in this area.</p>';
     return;
   }
 
-  const html = auctionList.map(createCardHTML).join('');
-  setContents(mapList,    html);
-  setContents(drawerList, html);
+  setContents(mapList, auctionList.map(createCardHTML).join(''));
 }
 
 let carouselScrollCleanup: (() => void) | null = null;
@@ -113,14 +108,11 @@ export function hideMarkerCarousel(): void {
 }
 
 export function appendMapCards(newAuctions: any[]): void {
-  const html = newAuctions.map(createCardHTML).join('');
-  [document.getElementById('map-card-list'), document.getElementById('drawer-card-list')]
-    .forEach(container => {
-      if (!container) return;
-      const temp = document.createElement('div');
-      temp.innerHTML = html;
-      while (temp.firstElementChild) container.appendChild(temp.firstElementChild);
-    });
+  const container = document.getElementById('map-card-list');
+  if (!container) return;
+  const temp = document.createElement('div');
+  temp.innerHTML = newAuctions.map(createCardHTML).join('');
+  while (temp.firstElementChild) container.appendChild(temp.firstElementChild);
 }
 
 // ── Lazy map mount ─────────────────────────────────────────────────────────────
@@ -167,11 +159,8 @@ export async function setView(showMap: boolean): Promise<void> {
     checkFavoriteStatus();
     state.mapViewInitialised = true;
 
-    const mapBtn    = document.getElementById('map-load-more-btn');
-    const drawerBtn = document.getElementById('drawer-load-more-btn');
-    [mapBtn, drawerBtn].forEach(b => {
-      if (b) b.style.display = state.hasMore ? '' : 'none';
-    });
+    const mapBtn = document.getElementById('map-load-more-btn');
+    if (mapBtn) mapBtn.style.display = state.hasMore ? '' : 'none';
 
     // Mount the Svelte component (no-op after first call), then signal the
     // map canvas to resize. The 50 ms delay gives Svelte's onMount time to

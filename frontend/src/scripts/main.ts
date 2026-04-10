@@ -16,8 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
     ?.addEventListener('click', (e) => loadMore(e.currentTarget as HTMLButtonElement));
   document.getElementById('map-load-more-btn')
     ?.addEventListener('click', (e) => loadMore(e.currentTarget as HTMLButtonElement));
-  document.getElementById('drawer-load-more-btn')
-    ?.addEventListener('click', (e) => loadMore(e.currentTarget as HTMLButtonElement));
 
   document.getElementById('view-toggle-btn')
     ?.addEventListener('click', () => setView(!state.isMapView));
@@ -70,9 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.currentMapAuctions = newAuctions;
     populateMapCards(newAuctions);
     checkFavoriteStatus();
-    ['map-load-more-btn', 'drawer-load-more-btn'].forEach(id => {
-      const b = document.getElementById(id);
-      if (b) b.style.display = 'none';
-    });
+    const mapBtn = document.getElementById('map-load-more-btn');
+    if (mapBtn) mapBtn.style.display = 'none';
   });
 });
