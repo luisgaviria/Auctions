@@ -31,33 +31,53 @@ func ScrapApg() []Auction {
 		e.ForEach("#content > div.columns.three.properties > div", func(i int, divElement *colly.HTMLElement) {
 			ddTexts := divElement.ChildTexts("dd")
 
-			var status, street, deposit string
-			switch {
-			case len(ddTexts) >= 5:
-				// [0]=AuctionStatus [1]=PropertyStatus [2]=Address [3]=Desc [4]=Deposit
-				status = ddTexts[1]
-				street = strings.ReplaceAll(ddTexts[2], ".,", ",")
-				deposit = ddTexts[len(ddTexts)-1]
-			case len(ddTexts) == 4:
-				// [0]=AuctionStatus [1]=Address [2]=Desc [3]=Deposit
-				status = "Off Market"
-				street = strings.ReplaceAll(ddTexts[1], ".,", ",")
-				deposit = ddTexts[len(ddTexts)-1]
-			default:
+			if len(ddTexts) < 4 {
 				return // not enough data
 			}
 
-			if street == "" {
+			// ddTexts[0] is always Auction Status — skip anything that is not active.
+			auctionStatus := strings.TrimSpace(ddTexts[0])
+			if strings.EqualFold(auctionStatus, "off") {
 				return
+			}
+
+			var status, street, date, deposit string
+			switch {
+			case len(ddTexts) >= 5:
+				// [0]=AuctionStatus [1]=PropertyStatus [2]=Address [3]=Desc [4]=Deposit
+				// Date may appear as an additional field — look for it explicitly via dt labels.
+				status = ddTexts[1]
+				street = strings.ReplaceAll(ddTexts[2], ".,", ",")
+				deposit = ddTexts[len(ddTexts)-1]
+			default:
+				// [0]=AuctionStatus [1]=Address [2]=Desc [3]=Deposit
+				status = auctionStatus
+				street = strings.ReplaceAll(ddTexts[1], ".,", ",")
+				deposit = ddTexts[len(ddTexts)-1]
+			}
+
+			// Extract date from <dt>/<dd> pairs by label so we never rely on position.
+			divElement.ForEach("dl.custom_field_list dt", func(_ int, dt *colly.HTMLElement) {
+				label := strings.ToLower(strings.TrimSpace(dt.Text))
+				if strings.Contains(label, "date") || strings.Contains(label, "auction date") {
+					dd := dt.DOM.Next()
+					if dd != nil {
+						date = strings.TrimSpace(dd.Text())
+					}
+				}
+			})
+
+			if street == "" || date == "" {
+				return // skip if no address or no scheduled date
 			}
 
 			auctions = append(auctions, Auction{
 				Status:  status,
 				Street:  street,
+				Date:    date,
 				Deposit: deposit,
 				Url:     url,
 				Logo:    logo,
-				// Date intentionally left empty — APG cards have no scheduled date.
 			})
 		})
 	})
