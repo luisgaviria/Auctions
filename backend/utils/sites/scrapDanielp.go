@@ -16,6 +16,24 @@ var (
 	dpTimeRe = regexp.MustCompile(`(\d{1,2}:\d{2}\s*[APap][Mm])`)
 )
 
+// extractDPCity pulls the city from a "STREET, CITY, MA" or "STREET, CITY, MA ZIPCODE"
+// address string by finding the comma-separated part that immediately precedes the
+// state token ("MA…").
+func extractDPCity(address string) string {
+	parts := strings.Split(address, ",")
+	for i := len(parts) - 1; i >= 1; i-- {
+		p := strings.TrimSpace(parts[i])
+		if strings.HasPrefix(strings.ToUpper(p), "MA") {
+			return strings.TrimSpace(parts[i-1])
+		}
+	}
+	// Fallback: second-to-last part when no explicit state token found.
+	if len(parts) >= 2 {
+		return strings.TrimSpace(parts[len(parts)-2])
+	}
+	return ""
+}
+
 // normalizeDPDate converts M/D/YYYY or MM/DD/YYYY to "2006-01-02" (ISO).
 // Returns the input unchanged if it cannot be parsed.
 func normalizeDPDate(s string) string {
@@ -95,7 +113,7 @@ func ScrapDanielP() []Auction {
 					Date:    date,
 					Time:    time,
 					Street:  address,
-					City:    "",
+					City:    extractDPCity(address),
 					Status:  status,
 					Logo:    logo,
 					Url:     url,
