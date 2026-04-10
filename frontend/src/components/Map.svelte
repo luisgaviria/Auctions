@@ -225,9 +225,9 @@
     map.on('click', (e) => {
       if (!e.originalEvent.target.closest('.map-marker')) {
         if (activePopup) { activePopup.remove(); activePopup = null; }
-        // On mobile, dismiss the detail sheet when tapping the map background.
+        // On mobile, dismiss the carousel when tapping the map background.
         if (window.innerWidth < 768) {
-          mapContainer.dispatchEvent(new CustomEvent('closemarkersheet', { bubbles: true }));
+          mapContainer.dispatchEvent(new CustomEvent('closemarkercarousel', { bubbles: true }));
         }
       }
     });
@@ -247,6 +247,14 @@
         entry.popup.setLngLat(entry.lngLat).addTo(map);
         activePopup = entry.popup;
       });
+    });
+
+    // 'pantomarker' is dispatched by the carousel scroll handler — pan the map
+    // to centre a marker without opening its popup (no flyTo zoom change).
+    mapContainer.addEventListener('pantomarker', (e) => {
+      const entry = markers.find(m => m.id === e.detail.id);
+      if (!entry) return;
+      map.easeTo({ center: entry.lngLat, duration: 300 });
     });
   });
 

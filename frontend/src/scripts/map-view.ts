@@ -27,17 +27,89 @@ export function populateMapCards(auctionList: any[]): void {
   setContents(drawerList, html);
 }
 
-export function showMarkerDetailSheet(auction: any): void {
-  const sheet = document.getElementById('marker-detail-sheet');
-  const cardEl = document.getElementById('marker-detail-card');
-  if (!sheet || !cardEl) return;
-  cardEl.innerHTML = createCardHTML(auction);
-  sheet.dataset.state = 'visible';
+let carouselScrollCleanup: (() => void) | null = null;
+
+function buildDots(carousel: HTMLElement, track: HTMLElement, count: number): void {
+  const dotsEl = document.getElementById('carousel-dots');
+  if (!dotsEl) return;
+  dotsEl.innerHTML = Array.from({ length: count }, (_, i) =>
+    `<div class="carousel-dot${i === 0 ? ' active' : ''}"></div>`
+  ).join('');
+
+  const dots = dotsEl.querySelectorAll<HTMLElement>('.carousel-dot');
+  const slides = track.querySelectorAll<HTMLElement>('.carousel-slide');
+
+  const onScroll = () => {
+    const slideWidth = track.offsetWidth + parseFloat(getComputedStyle(track).gap || '0') * 0 + 12;
+    const idx = Math.round(track.scrollLeft / slideWidth);
+    dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+
+    const slide = slides[idx];
+    if (slide) {
+      const id = parseInt(slide.dataset.auctionId ?? '', 10);
+      if (!isNaN(id)) {
+        document.querySelector('.map-container')?.dispatchEvent(
+          new CustomEvent('pantomarker', { bubbles: false, detail: { id } })
+        );
+      }
+    }
+  };
+
+  // Use IntersectionObserver per slide for accurate snap tracking
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.intersectionRatio >= 0.6) {
+          const slide = entry.target as HTMLElement;
+          const id = parseInt(slide.dataset.auctionId ?? '', 10);
+          const idx = Array.from(slides).indexOf(slide);
+          dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+          if (!isNaN(id)) {
+            document.querySelector('.map-container')?.dispatchEvent(
+              new CustomEvent('pantomarker', { bubbles: false, detail: { id } })
+            );
+          }
+        }
+      }
+    },
+    { root: track, threshold: 0.6 }
+  );
+
+  slides.forEach(s => observer.observe(s));
+
+  if (carouselScrollCleanup) carouselScrollCleanup();
+  carouselScrollCleanup = () => {
+    observer.disconnect();
+    track.removeEventListener('scroll', onScroll);
+  };
 }
 
-export function hideMarkerDetailSheet(): void {
-  const sheet = document.getElementById('marker-detail-sheet');
-  if (sheet) sheet.dataset.state = 'hidden';
+export function showMarkerCarousel(tappedAuction: any): void {
+  const carousel = document.getElementById('marker-card-carousel');
+  const track = document.getElementById('carousel-track');
+  if (!carousel || !track) return;
+
+  // Gather all current map auctions; put tapped one first
+  const pool: any[] = state.currentMapAuctions ?? state.allAuctions ?? [];
+  const others = pool.filter(a => a.id !== tappedAuction.id);
+  const ordered = [tappedAuction, ...others.slice(0, 9)]; // max 10 slides
+
+  track.innerHTML = ordered.map(a =>
+    `<div class="carousel-slide" data-auction-id="${a.id}">${createCardHTML(a)}</div>`
+  ).join('');
+
+  // Re-scroll to first slide
+  track.scrollLeft = 0;
+
+  buildDots(carousel, track, ordered.length);
+
+  carousel.dataset.state = 'visible';
+}
+
+export function hideMarkerCarousel(): void {
+  const carousel = document.getElementById('marker-card-carousel');
+  if (carousel) carousel.dataset.state = 'hidden';
+  if (carouselScrollCleanup) { carouselScrollCleanup(); carouselScrollCleanup = null; }
 }
 
 export function appendMapCards(newAuctions: any[]): void {

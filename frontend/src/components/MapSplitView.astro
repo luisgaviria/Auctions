@@ -27,15 +27,15 @@ const { auctions: _auctions, hasMore, apiUrl: _apiUrl } = Astro.props;
     <div id="map-mount" style="width:100%;height:100%"></div>
   </div>
 
-  {/* Mobile: single-card bottom sheet shown when a marker is tapped */}
-  <div id="marker-detail-sheet" class="marker-detail-sheet" data-state="hidden">
-    <div class="marker-sheet-bar">
-      <div class="marker-sheet-handle"></div>
-      <button id="marker-detail-close" class="marker-sheet-close" aria-label="Close detail">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
-    <div id="marker-detail-card" class="marker-sheet-card"></div>
+  {/* Mobile: floating glass card carousel shown when a marker is tapped */}
+  <div id="marker-card-carousel" class="marker-card-carousel" data-state="hidden">
+    <button id="carousel-close" class="carousel-close" aria-label="Close">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+    <div class="carousel-track" id="carousel-track"></div>
+    <div class="carousel-dots" id="carousel-dots"></div>
   </div>
 
   {/* Mobile pull-up drawer */}
@@ -241,55 +241,36 @@ const { auctions: _auctions, hasMore, apiUrl: _apiUrl } = Astro.props;
     }
   }
 
-  /* ── Marker detail sheet (mobile only) ── */
-  .marker-detail-sheet { display: none; }
+  /* ── Floating glass carousel (mobile only) ── */
+  .marker-card-carousel { display: none; }
 
   @media (max-width: 768px) {
-    .marker-detail-sheet {
+    .marker-card-carousel {
       display: block;
       position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: var(--color-surface);
-      border-radius: 16px 16px 0 0;
-      border-top: 1px solid var(--color-border);
-      box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.18);
+      bottom: 1.5rem;
+      left: 50%;
+      width: calc(100% - 2rem);
+      max-width: 380px;
       z-index: 100;
-      transform: translateY(100%);
-      transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-      max-height: 80vh;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-50%) translateY(24px);
+      transition: opacity 0.22s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
-    .marker-detail-sheet[data-state='visible'] {
-      transform: translateY(0);
+    .marker-card-carousel[data-state='visible'] {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(-50%) translateY(0);
     }
 
-    .marker-sheet-bar {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 10px 1rem 8px;
-      position: relative;
-      flex-shrink: 0;
-    }
-
-    .marker-sheet-handle {
-      width: 36px;
-      height: 4px;
-      border-radius: 2px;
-      background: var(--color-border);
-    }
-
-    .marker-sheet-close {
+    .carousel-close {
       position: absolute;
-      right: 0.75rem;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 2rem;
-      height: 2rem;
+      top: -0.75rem;
+      right: -0.75rem;
+      width: 1.75rem;
+      height: 1.75rem;
       border-radius: 50%;
       background: var(--color-surface-raised);
       border: 1px solid var(--color-border);
@@ -298,11 +279,40 @@ const { auctions: _auctions, hasMore, apiUrl: _apiUrl } = Astro.props;
       display: flex;
       align-items: center;
       justify-content: center;
-      flex-shrink: 0;
+      z-index: 10;
+      box-shadow: var(--shadow-md);
     }
 
-    .marker-sheet-card {
-      padding-bottom: env(safe-area-inset-bottom, 1rem);
+    .carousel-track {
+      display: flex;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      gap: 0.75rem;
+      border-radius: 20px;
+    }
+
+    .carousel-track::-webkit-scrollbar { display: none; }
+
+    .carousel-dots {
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+      margin-top: 0.5rem;
+    }
+
+    .carousel-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.4);
+      transition: background 0.2s, transform 0.2s;
+    }
+
+    .carousel-dot.active {
+      background: #fff;
+      transform: scale(1.3);
     }
   }
 </style>
@@ -422,48 +432,63 @@ const { auctions: _auctions, hasMore, apiUrl: _apiUrl } = Astro.props;
     overflow: hidden !important;
   }
 
-  /* ── Marker detail sheet card — full-width, thumb-friendly buttons ── */
-  #marker-detail-card .auction-card {
+  /* ── Carousel slides — glass card, thumb-friendly buttons ── */
+  .carousel-slide {
+    flex: 0 0 100%;
+    scroll-snap-align: center;
+    border-radius: 20px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18), 0 1px 0 rgba(255,255,255,0.08) inset;
+  }
+
+  .carousel-slide .auction-card {
     display: flex !important;
     flex-direction: column !important;
     height: auto !important;
     flex-shrink: 0 !important;
     border-radius: 0 !important;
     border: none !important;
+    background: transparent !important;
   }
 
-  #marker-detail-card .card-inner {
+  .carousel-slide .card-inner {
     display: flex !important;
     flex-direction: column !important;
     flex: 0 0 auto !important;
     height: auto !important;
+    background: transparent !important;
+    color: var(--color-text-primary) !important;
   }
 
-  #marker-detail-card .card-address-block {
+  .carousel-slide .card-address-block {
     flex: 0 0 auto !important;
   }
 
-  #marker-detail-card .card-research {
+  .carousel-slide .card-research {
     display: grid !important;
     grid-template-columns: repeat(4, 1fr) !important;
-    gap: 0.625rem !important;
-    padding: 1rem 1.375rem 1.25rem !important;
-    border-top: 1px solid var(--color-border) !important;
+    gap: 0.5rem !important;
+    padding: 0.875rem 1rem 1rem !important;
+    border-top: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent) !important;
   }
 
-  #marker-detail-card .research-btn {
+  .carousel-slide .research-btn {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     gap: 0.25rem !important;
-    height: 3rem !important;
+    height: 2.75rem !important;
     padding: 0 !important;
-    border-radius: 8px !important;
-    border: 1px solid var(--color-border) !important;
-    background: transparent !important;
+    border-radius: 10px !important;
+    border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent) !important;
+    background: color-mix(in srgb, var(--color-surface-raised) 70%, transparent) !important;
     color: var(--color-text-muted) !important;
     font-family: var(--font-mono) !important;
-    font-size: 0.625rem !important;
+    font-size: 0.6rem !important;
     font-weight: 700 !important;
     letter-spacing: 0.06em !important;
     text-transform: uppercase !important;

@@ -2,7 +2,7 @@ import { initState, state } from './state';
 import { checkFavoriteStatus, initFavoritesClickHandler } from './favorites';
 import { loadMore } from './load-more';
 import { initDrawer } from './drawer';
-import { populateMapCards, setView, showMarkerDetailSheet, hideMarkerDetailSheet } from './map-view';
+import { populateMapCards, setView, showMarkerCarousel, hideMarkerCarousel } from './map-view';
 
 // Hydrate shared state from the hidden #page-config element before anything else.
 initState();
@@ -38,14 +38,14 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   });
 
-  // Marker click → mobile: show detail sheet; desktop: scroll & highlight sidebar card.
+  // Marker click → mobile: show carousel; desktop: scroll & highlight sidebar card.
   document.getElementById('split-right')?.addEventListener('markerclick', (e: Event) => {
     const detail = (e as CustomEvent).detail;
     const id = detail?.id;
     if (!id) return;
 
     if (window.innerWidth < 768) {
-      if (detail.auction) showMarkerDetailSheet(detail.auction);
+      if (detail.auction) showMarkerCarousel(detail.auction);
       return;
     }
 
@@ -60,9 +60,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => card.classList.remove('is-active-highlight'), 2000);
   });
 
-  // Close marker detail sheet via button or map background tap.
-  document.getElementById('marker-detail-close')?.addEventListener('click', hideMarkerDetailSheet);
-  document.getElementById('split-right')?.addEventListener('closemarkersheet', hideMarkerDetailSheet);
+  // Close carousel via button or map background tap.
+  document.getElementById('carousel-close')?.addEventListener('click', hideMarkerCarousel);
+  document.getElementById('split-right')?.addEventListener('closemarkercarousel', hideMarkerCarousel);
 
   // Bbox search results → refresh sidebar cards.
   document.getElementById('split-right')?.addEventListener('auctionresultschange', (e: Event) => {
