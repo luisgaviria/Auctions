@@ -69,7 +69,10 @@ export async function setView(showMap: boolean): Promise<void> {
   const mapSplit = document.getElementById('map-split');
   const label    = document.getElementById('toggle-label');
 
+  const auctionsPage = document.getElementById('auctions-page');
+
   if (showMap) {
+    if (auctionsPage) auctionsPage.style.display = 'none';
     if (gridView) gridView.style.display = 'none';
     if (mapSplit) mapSplit.style.display = 'flex';
     document.getElementById('toggle-use')?.setAttribute('href', '#icon-th');
@@ -94,6 +97,7 @@ export async function setView(showMap: boolean): Promise<void> {
     }, 50);
   } else {
     if (mapSplit) mapSplit.style.display = 'none';
+    if (auctionsPage) auctionsPage.style.display = '';
     if (gridView) gridView.style.display = '';
     document.getElementById('toggle-use')?.setAttribute('href', '#icon-map');
     if (label)    label.textContent = 'Show Map';
