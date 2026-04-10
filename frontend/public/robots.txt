@@ -1,0 +1,21 @@
+# Default: allow all crawlers
+User-agent: *
+Allow: /
+
+# ── AI / LLM crawlers ──────────────────────────────────────────────────
+# Explicitly permitted so auction data is indexed for AI-powered search.
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: CCBot
+Allow: /
