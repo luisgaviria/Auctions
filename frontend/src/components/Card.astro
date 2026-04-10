@@ -14,9 +14,10 @@ interface Props {
   zillowUrl?: string;
   streetViewUrl?: string;
   registryUrl?: string;
+  nearbyLandmarks?: string[];
 }
 
-const { id, link, date, time: auctionTime, address, city, state, status, deposit, siteName, logo, zillowUrl, streetViewUrl, registryUrl } =
+const { id, link, date, time: auctionTime, address, city, state, status, deposit, siteName, logo, zillowUrl, streetViewUrl, registryUrl, nearbyLandmarks } =
   Astro.props;
 
 function toISODate(str: string): string {
@@ -161,6 +162,30 @@ const displayStatus = status || 'On Schedule';
     )}
   </div>
 
+  {/* Semantic fact sheet — visually hidden, always present for LLMs and crawlers */}
+  <div class="sr-only" aria-hidden="true" data-ai-summary="true">
+    <p>This property is located at {address}{city ? `, ${city}` : ''}{state ? `, ${state}` : ''}.</p>
+    {city && <p>The auction is in {city}, {state || 'Massachusetts'}.</p>}
+    <p>
+      {isoDate
+        ? `The auction is scheduled for ${date}${auctionTime ? ` at ${auctionTime}` : ''}.`
+        : 'The auction date has not yet been confirmed.'}
+    </p>
+    <p>The current listing status is {status || 'On Schedule'}.</p>
+    {displayAuctioneer && <p>The auctioneer conducting this sale is {displayAuctioneer}.</p>}
+    <p>
+      {deposit
+        ? `The required deposit is ${deposit}, payable by bank check.`
+        : 'Deposit terms have not been specified.'}
+    </p>
+    {(nearbyLandmarks && nearbyLandmarks.length > 0) && (
+      <p>Nearby landmarks include: {nearbyLandmarks.join(', ')}.</p>
+    )}
+    {link && <p>Full auction details are available at the listing URL.</p>}
+    {zillowUrl && <p>Property valuation data is available on Zillow.</p>}
+    {registryUrl && <p>Deed and ownership records are available through the Registry of Deeds.</p>}
+  </div>
+
 </div>
 
 <script type="application/ld+json" set:html={schemaJson} />
@@ -180,6 +205,19 @@ const displayStatus = status || 'On Schedule';
 </script>
 
 <style is:global>
+  /* Visually hidden but present in DOM for screen readers, crawlers, and LLMs */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   /* ═══════════════════════════════════════════════
      Auction Card — Vercel-style
      ═══════════════════════════════════════════════ */

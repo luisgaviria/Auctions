@@ -24,7 +24,7 @@ export function populateMapCards(auctionList: any[]): void {
 
 let carouselScrollCleanup: (() => void) | null = null;
 
-function buildDots(carousel: HTMLElement, track: HTMLElement, count: number): void {
+function buildDots(_carousel: HTMLElement, track: HTMLElement, count: number): void {
   const dotsEl = document.getElementById('carousel-dots');
   if (!dotsEl) return;
   dotsEl.innerHTML = Array.from({ length: count }, (_, i) =>
