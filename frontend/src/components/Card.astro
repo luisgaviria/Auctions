@@ -39,33 +39,38 @@ function formatSiteName(s: string): string {
     .join(' ');
 }
 
-const schema = {
+// Parse deposit string like "$5,000" → 5000 for schema price field.
+function parseDeposit(raw: string): number | undefined {
+  if (!raw) return undefined;
+  const n = parseFloat(raw.replace(/[^0-9.]/g, ''));
+  return isNaN(n) ? undefined : n;
+}
+
+const isoDate = toISODate(date);
+const depositAmount = parseDeposit(deposit);
+const displayAuctioneer = formatSiteName(siteName);
+
+const schema: Record<string, unknown> = {
   '@context': 'https://schema.org',
-  '@type': 'Event',
-  name: `Property Auction: ${address}`,
-  description: `Real estate auction at ${address}${city ? `, ${city}` : ''}${state ? `, ${state}` : ''}.`,
-  startDate: toISODate(date) || undefined,
-  location: {
-    '@type': 'Place',
-    name: address,
-    address: {
-      '@type': 'PostalAddress',
-      streetAddress: address,
-      addressLocality: city || undefined,
-      addressRegion: state || 'MA',
-      addressCountry: 'US',
-    },
+  '@type': 'RealEstateListing',
+  name: address,
+  description: `Foreclosure auction for ${address}${city ? `, ${city}` : ''}${state ? `, ${state}` : ''}${isoDate ? ` scheduled for ${date}` : ''}.`,
+  address: {
+    '@type': 'PostalAddress',
+    streetAddress: address,
+    addressLocality: city || undefined,
+    addressRegion: state || 'MA',
+    addressCountry: 'US',
   },
-  organizer: { '@type': 'Organization', name: formatSiteName(siteName) || undefined },
-  eventStatus: 'https://schema.org/EventScheduled',
-  eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
-  url: link || undefined,
+  ...(depositAmount !== undefined && { price: depositAmount, priceCurrency: 'USD' }),
+  ...(isoDate && { availabilityStarts: isoDate }),
+  ...(link && { url: link }),
+  ...(displayAuctioneer && { offeredBy: { '@type': 'Organization', name: displayAuctioneer } }),
 };
 
 const schemaJson = JSON.stringify(schema).replace(/</g, '\\u003c');
 const statusCat = statusCategory(status);
 const displayStatus = status || 'On Schedule';
-const displaySite = formatSiteName(siteName);
 ---
 
 <div class="auction-card" data-date={toISODate(date)}>
@@ -80,7 +85,7 @@ const displaySite = formatSiteName(siteName);
         <span class="status-dot"></span>
         <span class="status-text">{displayStatus}</span>
       </div>
-      {displaySite && <span class="auctioneer-label">{displaySite}</span>}
+      {displayAuctioneer && <span class="auctioneer-label">{displayAuctioneer}</span>}
     </div>
 
     <!-- Address block -->
