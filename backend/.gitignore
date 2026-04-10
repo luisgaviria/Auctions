@@ -1,5 +1,4 @@
 .env
 .vscode/backend/tmp/
 build-errors.log
-/backend/tmp/
-/tmp/
+backend/tmp

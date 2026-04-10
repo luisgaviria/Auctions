@@ -92,25 +92,40 @@ func patriotDetail(ctx context.Context, url string) (deposit, status string) {
 		return "", "On Schedule"
 	}
 
-	// Extract the first $X,XXX dollar amount from the detail page.
-	// Try selectors from most-specific to least-specific so a site redesign
-	// degrades gracefully rather than returning an empty deposit.
-	dollarRe := regexp.MustCompile(`\$[0-9,]+`)
-	candidateSelectors := []string{
-		".auction-terms",
-		".auction-details",
-		".terms",
-		"#calendar > div:nth-child(2) > div > div.col-md-4 > div:nth-child(3) > p",
-		"#calendar > div:nth-child(2) > div > div.col-md-4",
-		".col-md-4",
-	}
-	for _, sel := range candidateSelectors {
-		text := doc.Find(sel).Text()
-		if m := dollarRe.FindString(text); m != "" {
-			deposit = m
-			break
+	// depositTermsRe finds a dollar amount immediately before the word "deposit",
+	// e.g. "$10,000 deposit by bank check" or "$5,000.00 deposit shall be paid".
+	depositTermsRe := regexp.MustCompile(`(\$[\d,]+(?:\.\d{2})?)\s+deposit`)
+	// dollarRe is a fallback that grabs any dollar amount.
+	dollarRe := regexp.MustCompile(`\$[\d,]+(?:\.\d{2})?`)
+
+	// First pass: look for the deposit-specific pattern inside .auction-terms.
+	// This avoids accidentally capturing tax amounts or other dollar figures
+	// that appear in the same block.
+	if termsText := doc.Find(".auction-terms").Text(); termsText != "" {
+		if m := depositTermsRe.FindStringSubmatch(termsText); len(m) > 1 {
+			deposit = m[1]
 		}
 	}
+
+	// Second pass: if the terms pattern didn't match, fall back to the first
+	// dollar amount found across progressively broader selectors.
+	if deposit == "" {
+		candidateSelectors := []string{
+			".auction-terms",
+			".auction-details",
+			".terms",
+			"#calendar > div:nth-child(2) > div > div.col-md-4 > div:nth-child(3) > p",
+			"#calendar > div:nth-child(2) > div > div.col-md-4",
+			".col-md-4",
+		}
+		for _, sel := range candidateSelectors {
+			if m := dollarRe.FindString(doc.Find(sel).Text()); m != "" {
+				deposit = m
+				break
+			}
+		}
+	}
+
 	// Last resort: scan the entire document for any dollar amount.
 	if deposit == "" {
 		if m := dollarRe.FindString(doc.Text()); m != "" {
