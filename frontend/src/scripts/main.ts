@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!card) return;
     e.preventDefault();
     e.stopPropagation();
-    if ((e.target as Element).closest('.favorite-btn')) return;
+    if ((e.target as Element).closest('.favorite-btn, .research-btn')) return;
     const id = parseInt(card.dataset.auctionId ?? '', 10);
     if (isNaN(id)) return;
     document.querySelector('.map-container')?.dispatchEvent(

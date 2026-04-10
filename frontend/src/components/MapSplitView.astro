@@ -259,6 +259,43 @@ const { auctions: _auctions, hasMore, apiUrl: _apiUrl } = Astro.props;
     visibility: visible !important;
   }
 
+  .split-card-list .card-research {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  /* Drawer (mobile) — same overrides as split-card-list */
+  .drawer-card-list .auction-card {
+    display: block !important;
+    height: auto !important;
+    min-height: 180px !important;
+    margin-bottom: 1rem;
+  }
+
+  .drawer-card-list .card-inner {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+    background: var(--color-surface) !important;
+    color: var(--color-text-primary) !important;
+  }
+
+  .drawer-card-list .card-address-block,
+  .drawer-card-list .card-data-row {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  .drawer-card-list .card-research {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
   .is-active-highlight {
     border: 2px solid var(--color-primary) !important;
     animation: card-highlight-pulse 0.7s ease-out forwards;

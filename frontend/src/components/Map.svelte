@@ -52,6 +52,13 @@
       const el = document.createElement('div');
       el.className = 'map-marker';
 
+      const popupBtns = [
+        auction.link          && `<a href="${auction.link}"           target="_blank" rel="noopener noreferrer" class="popup-btn popup-btn--listing">Listing</a>`,
+        auction.zillow_url    && `<a href="${auction.zillow_url}"     target="_blank" rel="noopener noreferrer" class="popup-btn popup-btn--zillow">Zillow</a>`,
+        auction.street_view_url && `<a href="${auction.street_view_url}" target="_blank" rel="noopener noreferrer" class="popup-btn popup-btn--maps">Maps</a>`,
+        auction.registry_url  && `<a href="${auction.registry_url}"   target="_blank" rel="noopener noreferrer" class="popup-btn popup-btn--registry">Registry</a>`,
+      ].filter(Boolean).join('');
+
       const popup = new maplibregl.Popup({
         offset: 18,
         closeButton: false,
@@ -66,7 +73,7 @@
             ${auction.deposit ? `<span class="popup-chip">${auction.deposit}</span>` : ''}
           </div>
           ${auction.site_name ? `<p class="popup-source">${formatSiteName(auction.site_name)}</p>` : ''}
-          ${auction.link ? `<a href="${auction.link}" target="_blank" rel="noopener noreferrer" class="popup-cta">View Details →</a>` : ''}
+          ${popupBtns ? `<div class="popup-actions">${popupBtns}</div>` : ''}
         </div>
       `);
 
@@ -421,16 +428,40 @@
     font-family: var(--font-mono, monospace);
     margin: 0;
   }
-  :global(.popup-cta) {
-    display: inline-block;
-    margin-top: 0.5rem;
-    font-size: 0.8125rem;
-    font-weight: 700;
-    color: var(--color-accent, #00b37e);
-    text-decoration: none;
-    letter-spacing: -0.01em;
+  :global(.popup-actions) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin-top: 0.625rem;
   }
-  :global(.popup-cta:hover) { text-decoration: underline; }
+
+  :global(.popup-btn) {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.625rem;
+    border-radius: 6px;
+    border: 1px solid #e4e4e7;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: #52525b;
+    background: transparent;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    white-space: nowrap;
+  }
+
+  :global(.popup-btn--listing:hover) { background: var(--color-accent, #00b37e); color: #fff; border-color: var(--color-accent, #00b37e); }
+  :global(.popup-btn--zillow:hover)  { background: #006aff; color: #fff; border-color: #006aff; }
+  :global(.popup-btn--maps:hover)    { background: #ea4335; color: #fff; border-color: #ea4335; }
+  :global(.popup-btn--registry:hover){ background: #1a7340; color: #fff; border-color: #1a7340; }
+
+  :global([data-theme='dark'] .popup-btn) {
+    border-color: #3f3f46;
+    color: #a1a1aa;
+  }
 
   :global([data-theme='dark'] .auction-popup .maplibregl-popup-content) {
     background: #18181b;
