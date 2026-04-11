@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -23,26 +24,25 @@ type Record struct {
 	Logo    string `json:"logo,omitempty"`
 }
 
-// extractStatus pulls the status text out of Baystate's inline HTML markup
-// that appears inside date strings for cancelled/postponed auctions, and
-// normalises it to a canonical value ("Cancelled", "Postponed", or "").
-func extractStatus(date string) string {
-	// Extract inner text of the first HTML tag: split on '> then on </
-	parts := strings.Split(date, "'>")
-	if len(parts) > 1 {
-		raw := strings.Split(parts[1], "</")[0]
-		raw = strings.TrimSpace(raw)
-		lower := strings.ToLower(raw)
-		switch {
-		case strings.Contains(lower, "cancel"):
+// resolveStatus returns the canonical status for a Baystate record.
+// It checks two sources in order:
+//  1. The JSON "status" field (Baystate sometimes populates this directly).
+//  2. The "date" field, which may contain embedded HTML like
+//     <span class='...'>CANCELLED</span> appended after the date string.
+//
+// Both checks are case-insensitive, so CANCELLED / Cancelled / cancelled all
+// resolve to "Cancelled".
+func resolveStatus(jsonStatus, dateField string) string {
+	for _, s := range []string{jsonStatus, dateField} {
+		lower := strings.ToLower(s)
+		if strings.Contains(lower, "cancel") {
 			return "Cancelled"
-		case strings.Contains(lower, "postpone"):
+		}
+		if strings.Contains(lower, "postpone") {
 			return "Postponed"
-		case raw != "":
-			return raw
 		}
 	}
-	return ""
+	return "On Schedule"
 }
 
 // parseBaystateDateTime extracts date (YYYY-MM-DD) and time (e.g. "10:00 AM")
@@ -121,15 +121,14 @@ func ScrapBaystate(ctx context.Context) ([]Auction, error) {
 
 	auctions := make([]Auction, 0, len(data))
 	for _, record := range data {
-		dateLower := strings.ToLower(record.Date)
-		if strings.Contains(dateLower, "cancel") || strings.Contains(dateLower, "postpone") {
-			record.Status = extractStatus(record.Date)
-		} else {
-			record.Status = "On Schedule"
-		}
+		status := resolveStatus(record.Status, record.Date)
+
+		log.Printf("[baystate] parsing addr=%q raw_status=%q raw_date=%q → resolved=%q",
+			record.Address, record.Status, record.Date, status)
 
 		// Skip cancelled listings — they're over and clutter the feed.
-		if record.Status == "Cancelled" {
+		if status == "Cancelled" {
+			log.Printf("[baystate] skipping cancelled: %q", record.Address)
 			continue
 		}
 
@@ -143,7 +142,7 @@ func ScrapBaystate(ctx context.Context) ([]Auction, error) {
 			City:     record.City,
 			Date:     parsedDate,
 			Time:     parsedTime,
-			Status:   record.Status,
+			Status:   status,
 			Deposit:  record.Deposit,
 		})
 	}
