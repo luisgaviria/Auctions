@@ -24,13 +24,22 @@ type Record struct {
 }
 
 // extractStatus pulls the status text out of Baystate's inline HTML markup
-// that appears inside date strings for cancelled/postponed auctions.
+// that appears inside date strings for cancelled/postponed auctions, and
+// normalises it to a canonical value ("Cancelled", "Postponed", or "").
 func extractStatus(date string) string {
+	// Extract inner text of the first HTML tag: split on '> then on </
 	parts := strings.Split(date, "'>")
 	if len(parts) > 1 {
-		statusParts := strings.Split(parts[1], "</")
-		if len(statusParts) > 0 {
-			return statusParts[0]
+		raw := strings.Split(parts[1], "</")[0]
+		raw = strings.TrimSpace(raw)
+		lower := strings.ToLower(raw)
+		switch {
+		case strings.Contains(lower, "cancel"):
+			return "Cancelled"
+		case strings.Contains(lower, "postpone"):
+			return "Postponed"
+		case raw != "":
+			return raw
 		}
 	}
 	return ""
@@ -112,11 +121,18 @@ func ScrapBaystate(ctx context.Context) ([]Auction, error) {
 
 	auctions := make([]Auction, 0, len(data))
 	for _, record := range data {
-		if strings.Contains(record.Date, "IS CANCELLED") || strings.Contains(record.Date, "Postponed") {
+		dateLower := strings.ToLower(record.Date)
+		if strings.Contains(dateLower, "cancel") || strings.Contains(dateLower, "postpone") {
 			record.Status = extractStatus(record.Date)
 		} else {
 			record.Status = "On Schedule"
 		}
+
+		// Skip cancelled listings — they're over and clutter the feed.
+		if record.Status == "Cancelled" {
+			continue
+		}
+
 		parsedDate, parsedTime := parseBaystateDateTime(record.Date)
 
 		auctions = append(auctions, Auction{
