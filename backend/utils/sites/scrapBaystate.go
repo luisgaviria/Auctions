@@ -126,13 +126,13 @@ func ScrapBaystate(ctx context.Context) ([]Auction, error) {
 		log.Printf("[baystate] parsing addr=%q raw_status=%q raw_date=%q → resolved=%q",
 			record.Address, record.Status, record.Date, status)
 
-		// Skip cancelled listings — they're over and clutter the feed.
-		if status == "Cancelled" {
-			log.Printf("[baystate] skipping cancelled: %q", record.Address)
-			continue
-		}
-
 		parsedDate, parsedTime := parseBaystateDateTime(record.Date)
+
+		// If the date couldn't be parsed (common for cancelled listings), fall
+		// back to today so the NOT NULL constraint on the date column is satisfied.
+		if parsedDate == "" {
+			parsedDate = time.Now().Format("2006-01-02")
+		}
 
 		auctions = append(auctions, Auction{
 			SiteName: "baystate",
