@@ -84,10 +84,13 @@ func ScrapPatriot(ctx context.Context) ([]Auction, error) {
 // deposit string and status text. On any failure, safe defaults are returned
 // so the listing is still recorded with partial data.
 func patriotDetail(ctx context.Context, url string) (deposit, status string) {
-	html, err := CFetch(ctx, url)
+	// Use CFetchSlow: wait 3 s after networkidle0 and block until .auction-box
+	// appears, giving JS-rendered terms time to paint before we grab the HTML.
+	html, err := CFetchSlow(ctx, url, ".auction-box", 3000)
 	if err != nil {
 		return "", "On Schedule"
 	}
+	log.Printf("[patriot] detail html_bytes=%d url=%q", len(html), url)
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
 		return "", "On Schedule"
@@ -157,6 +160,22 @@ func patriotDetail(ctx context.Context, url string) (deposit, status string) {
 				break
 			}
 		}
+	}
+
+	// Fourth pass: scan every <p> in the document (not scoped to .auction-box).
+	// Catches pages where the terms are outside the expected container.
+	if deposit == "" {
+		log.Printf("[patriot] scanning ALL document paragraphs url=%q", url)
+		doc.Find("p").Each(func(i int, p *goquery.Selection) {
+			text := cleanText(p.Text())
+			if deposit == "" && strings.Contains(strings.ToLower(text), "deposit") {
+				log.Printf("[patriot]   doc-p[%d] text=%q", i, text)
+				deposit = matchDeposit(text)
+				if deposit != "" {
+					log.Printf("[patriot]   → matched deposit=%q at doc-p[%d]", deposit, i)
+				}
+			}
+		})
 	}
 
 	// Last resort: full document text.

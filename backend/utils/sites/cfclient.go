@@ -23,10 +23,12 @@ const cfJobEndpoint = "https://api.cloudflare.com/client/v4/accounts/%s/browser-
 // CFetch is therefore a pure "render this URL and return HTML" utility.
 
 type cfCrawlRequest struct {
-	URL         string         `json:"url"`
-	Formats     []string       `json:"formats"`               // ["html"]
-	Depth       int            `json:"depth"`                 // 0 = target URL only, no link following
-	GotoOptions *cfGotoOptions `json:"gotoOptions,omitempty"` // navigation options
+	URL             string         `json:"url"`
+	Formats         []string       `json:"formats"`                       // ["html"]
+	Depth           int            `json:"depth"`                         // 0 = target URL only, no link following
+	GotoOptions     *cfGotoOptions `json:"gotoOptions,omitempty"`         // navigation options
+	WaitForSelector string         `json:"waitForSelector,omitempty"`     // block until selector appears in DOM
+	Wait            int            `json:"wait,omitempty"`                // ms to pause after page load before returning HTML
 }
 
 type cfGotoOptions struct {
@@ -83,6 +85,18 @@ type cfJobResponse struct {
 //
 // Reads CF_ACCOUNT_ID and CF_API_TOKEN from the environment.
 func CFetch(ctx context.Context, targetURL string) (string, error) {
+	return cfetch(ctx, targetURL, "", 0)
+}
+
+// CFetchSlow is like CFetch but instructs Cloudflare to wait an additional
+// waitMs milliseconds after the network goes idle before returning HTML, and
+// to block until waitForSelector appears in the DOM (if non-empty).
+// Use this for pages where JS renders critical content after networkidle0.
+func CFetchSlow(ctx context.Context, targetURL, waitForSelector string, waitMs int) (string, error) {
+	return cfetch(ctx, targetURL, waitForSelector, waitMs)
+}
+
+func cfetch(ctx context.Context, targetURL, waitForSelector string, waitMs int) (string, error) {
 	accountID := os.Getenv("CF_ACCOUNT_ID")
 	token := os.Getenv("CF_API_TOKEN")
 	if accountID == "" || token == "" {
@@ -90,9 +104,11 @@ func CFetch(ctx context.Context, targetURL string) (string, error) {
 	}
 
 	payload := cfCrawlRequest{
-		URL:     targetURL,
-		Formats: []string{"html"},
-		Depth:   1,
+		URL:             targetURL,
+		Formats:         []string{"html"},
+		Depth:           1,
+		WaitForSelector: waitForSelector,
+		Wait:            waitMs,
 		GotoOptions: &cfGotoOptions{
 			WaitUntil: "networkidle0",
 		},

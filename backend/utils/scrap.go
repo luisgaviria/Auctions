@@ -374,23 +374,35 @@ func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 		dateParam = a.Date
 	}
 
+	// Use a named prepared statement to avoid lib/pq's unnamed "" prepared
+	// statement being shared with the 2-param UPDATE in migrateNonISODates.
+	// When concurrent goroutines return different SQL to the same connection's
+	// unnamed slot, pq can bind the wrong parameter count. A named statement
+	// is isolated to this specific SQL and avoids the conflict entirely.
+	stmt, prepErr := db.PrepareContext(ctx, upsertAuctionSQL)
+	if prepErr != nil {
+		log.Printf("[upsert] prepare error for %q (%s): %v", a.Street, a.SiteName, prepErr)
+		return
+	}
+	defer stmt.Close()
+
 	var id int
-	err := db.QueryRowContext(ctx, upsertAuctionSQL,
-		a.Street,       // $1  address
-		a.City,         // $2  city
+	err := stmt.QueryRowContext(ctx,
+		a.Street,        // $1  address
+		a.City,          // $2  city
 		"Massachusetts", // $3  state
-		a.Time,         // $4  time
-		a.Logo,         // $5  logo
-		a.SiteName,     // $6  site_name
-		a.Status,       // $7  status
-		a.Url,          // $8  link
-		dateParam,      // $9  date
-		a.Deposit,      // $10 deposit
-		"0",            // $11 lat
-		"0",            // $12 lng
-		a.ZillowURL,    // $13 zillow_url
+		a.Time,          // $4  time
+		a.Logo,          // $5  logo
+		a.SiteName,      // $6  site_name
+		a.Status,        // $7  status
+		a.Url,           // $8  link
+		dateParam,       // $9  date
+		a.Deposit,       // $10 deposit
+		"0",             // $11 lat
+		"0",             // $12 lng
+		a.ZillowURL,     // $13 zillow_url
 		a.StreetViewURL, // $14 street_view_url
-		a.RegistryURL,  // $15 registry_url
+		a.RegistryURL,   // $15 registry_url
 	).Scan(&id)
 	if err != nil {
 		log.Printf("[upsert] error for %q (%s): %v", a.Street, a.SiteName, err)
