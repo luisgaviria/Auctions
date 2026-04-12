@@ -93,65 +93,83 @@ func patriotDetail(ctx context.Context, url string) (deposit, status string) {
 		return "", "On Schedule"
 	}
 
-	// Primary: "$10,000 deposit" — dollar amount immediately before the word
-	// "deposit" (case-insensitive to handle "DEPOSIT" or "Deposit").
+	// cleanText normalises whitespace: replaces non-breaking spaces (\xA0)
+	// and other Unicode spaces with a plain space, then trims.
+	cleanText := func(s string) string {
+		s = strings.ReplaceAll(s, "\u00a0", " ") // &nbsp;
+		s = strings.ReplaceAll(s, "\u200b", " ") // zero-width space
+		return strings.TrimSpace(s)
+	}
+
+	// Primary: "$10,000 deposit" — dollar amount immediately before "deposit".
 	depositBeforeRe := regexp.MustCompile(`(?i)(\$[\d,]+(?:\.\d{2})?)\s+deposit`)
 	// Secondary: "deposit of $10,000" — dollar amount immediately after.
 	depositAfterRe := regexp.MustCompile(`(?i)deposit\s+of\s+(\$[\d,]+(?:\.\d{2})?)`)
 	// Fallback: any dollar amount.
 	dollarRe := regexp.MustCompile(`\$[\d,]+(?:\.\d{2})?`)
 
-	termsText := doc.Find(".auction-terms").Text()
-	log.Printf("[patriot] detail url=%q terms_text=%q", url, termsText)
-
-	// First pass: deposit-specific patterns inside .auction-terms.
-	if termsText != "" {
-		if m := depositBeforeRe.FindStringSubmatch(termsText); len(m) > 1 {
-			deposit = m[1]
-		} else if m := depositAfterRe.FindStringSubmatch(termsText); len(m) > 1 {
-			deposit = m[1]
+	matchDeposit := func(text string) string {
+		text = cleanText(text)
+		if m := depositBeforeRe.FindStringSubmatch(text); len(m) > 1 {
+			return m[1]
 		}
+		if m := depositAfterRe.FindStringSubmatch(text); len(m) > 1 {
+			return m[1]
+		}
+		return ""
 	}
 
-	log.Printf("[patriot] after terms pass deposit=%q", deposit)
-
-	// Second pass: broader selectors with the deposit-before pattern, then any dollar amount.
-	if deposit == "" {
-		candidateSelectors := []string{
-			".auction-terms",
-			".auction-details",
-			".terms",
-			"#calendar > div:nth-child(2) > div > div.col-md-4 > div:nth-child(3) > p",
-			"#calendar > div:nth-child(2) > div > div.col-md-4",
-			".col-md-4",
-		}
-		for _, sel := range candidateSelectors {
-			text := doc.Find(sel).Text()
-			if m := depositBeforeRe.FindStringSubmatch(text); len(m) > 1 {
-				deposit = m[1]
-				break
+	// First pass: iterate every <p> inside .auction-box and log each one so we
+	// can see exactly which paragraph contains the deposit terms.
+	log.Printf("[patriot] scanning .auction-box paragraphs for url=%q", url)
+	doc.Find(".auction-box p").Each(func(i int, p *goquery.Selection) {
+		text := cleanText(p.Text())
+		log.Printf("[patriot]   p[%d] text=%q", i, text)
+		if deposit == "" {
+			deposit = matchDeposit(text)
+			if deposit != "" {
+				log.Printf("[patriot]   → matched deposit=%q at p[%d]", deposit, i)
 			}
-			if m := depositAfterRe.FindStringSubmatch(text); len(m) > 1 {
-				deposit = m[1]
+		}
+	})
+
+	// Second pass: .auction-terms (original selector) as a single block.
+	if deposit == "" {
+		termsText := cleanText(doc.Find(".auction-terms").Text())
+		log.Printf("[patriot] .auction-terms text=%q", termsText)
+		deposit = matchDeposit(termsText)
+	}
+
+	// Third pass: broader candidate selectors.
+	if deposit == "" {
+		for _, sel := range []string{
+			".auction-details", ".terms", ".col-md-4",
+		} {
+			text := cleanText(doc.Find(sel).Text())
+			if d := matchDeposit(text); d != "" {
+				deposit = d
+				log.Printf("[patriot] matched via selector %q deposit=%q", sel, deposit)
 				break
 			}
 			if m := dollarRe.FindString(text); m != "" {
 				deposit = m
+				log.Printf("[patriot] fallback dollar via selector %q deposit=%q", sel, deposit)
 				break
 			}
 		}
 	}
 
-	// Last resort: scan the entire document.
+	// Last resort: full document text.
 	if deposit == "" {
-		if m := depositBeforeRe.FindStringSubmatch(doc.Text()); len(m) > 1 {
-			deposit = m[1]
-		} else if m := dollarRe.FindString(doc.Text()); m != "" {
+		fullText := cleanText(doc.Text())
+		if d := matchDeposit(fullText); d != "" {
+			deposit = d
+		} else if m := dollarRe.FindString(fullText); m != "" {
 			deposit = m
 		}
 	}
 
-	log.Printf("[patriot] final deposit=%q", deposit)
+	log.Printf("[patriot] final deposit=%q url=%q", deposit, url)
 
 	status = strings.TrimSpace(doc.Find(
 		"#calendar > div:nth-child(2) > div > div.col-md-4 > div:nth-child(1) > p > span.text-red > strong",
