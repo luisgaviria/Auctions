@@ -3,6 +3,7 @@ package sites
 import (
 	"context"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -92,23 +93,29 @@ func patriotDetail(ctx context.Context, url string) (deposit, status string) {
 		return "", "On Schedule"
 	}
 
-	// depositTermsRe finds a dollar amount immediately before the word "deposit",
-	// e.g. "$10,000 deposit by bank check" or "$5,000.00 deposit shall be paid".
-	depositTermsRe := regexp.MustCompile(`(\$[\d,]+(?:\.\d{2})?)\s+deposit`)
-	// dollarRe is a fallback that grabs any dollar amount.
+	// Primary: "$10,000 deposit" — dollar amount immediately before the word
+	// "deposit" (case-insensitive to handle "DEPOSIT" or "Deposit").
+	depositBeforeRe := regexp.MustCompile(`(?i)(\$[\d,]+(?:\.\d{2})?)\s+deposit`)
+	// Secondary: "deposit of $10,000" — dollar amount immediately after.
+	depositAfterRe := regexp.MustCompile(`(?i)deposit\s+of\s+(\$[\d,]+(?:\.\d{2})?)`)
+	// Fallback: any dollar amount.
 	dollarRe := regexp.MustCompile(`\$[\d,]+(?:\.\d{2})?`)
 
-	// First pass: look for the deposit-specific pattern inside .auction-terms.
-	// This avoids accidentally capturing tax amounts or other dollar figures
-	// that appear in the same block.
-	if termsText := doc.Find(".auction-terms").Text(); termsText != "" {
-		if m := depositTermsRe.FindStringSubmatch(termsText); len(m) > 1 {
+	termsText := doc.Find(".auction-terms").Text()
+	log.Printf("[patriot] detail url=%q terms_text=%q", url, termsText)
+
+	// First pass: deposit-specific patterns inside .auction-terms.
+	if termsText != "" {
+		if m := depositBeforeRe.FindStringSubmatch(termsText); len(m) > 1 {
+			deposit = m[1]
+		} else if m := depositAfterRe.FindStringSubmatch(termsText); len(m) > 1 {
 			deposit = m[1]
 		}
 	}
 
-	// Second pass: if the terms pattern didn't match, fall back to the first
-	// dollar amount found across progressively broader selectors.
+	log.Printf("[patriot] after terms pass deposit=%q", deposit)
+
+	// Second pass: broader selectors with the deposit-before pattern, then any dollar amount.
 	if deposit == "" {
 		candidateSelectors := []string{
 			".auction-terms",
@@ -119,19 +126,32 @@ func patriotDetail(ctx context.Context, url string) (deposit, status string) {
 			".col-md-4",
 		}
 		for _, sel := range candidateSelectors {
-			if m := dollarRe.FindString(doc.Find(sel).Text()); m != "" {
+			text := doc.Find(sel).Text()
+			if m := depositBeforeRe.FindStringSubmatch(text); len(m) > 1 {
+				deposit = m[1]
+				break
+			}
+			if m := depositAfterRe.FindStringSubmatch(text); len(m) > 1 {
+				deposit = m[1]
+				break
+			}
+			if m := dollarRe.FindString(text); m != "" {
 				deposit = m
 				break
 			}
 		}
 	}
 
-	// Last resort: scan the entire document for any dollar amount.
+	// Last resort: scan the entire document.
 	if deposit == "" {
-		if m := dollarRe.FindString(doc.Text()); m != "" {
+		if m := depositBeforeRe.FindStringSubmatch(doc.Text()); len(m) > 1 {
+			deposit = m[1]
+		} else if m := dollarRe.FindString(doc.Text()); m != "" {
 			deposit = m
 		}
 	}
+
+	log.Printf("[patriot] final deposit=%q", deposit)
 
 	status = strings.TrimSpace(doc.Find(
 		"#calendar > div:nth-child(2) > div > div.col-md-4 > div:nth-child(1) > p > span.text-red > strong",
