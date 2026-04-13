@@ -84,9 +84,9 @@ func ScrapPatriot(ctx context.Context) ([]Auction, error) {
 // deposit string and status text. On any failure, safe defaults are returned
 // so the listing is still recorded with partial data.
 func patriotDetail(ctx context.Context, url string) (deposit, status string) {
-	// Use CFetchSlow: wait 3 s after networkidle0 and block until .auction-box
-	// appears, giving JS-rendered terms time to paint before we grab the HTML.
-	html, err := CFetchSlow(ctx, url, ".auction-box", 3000)
+	// Use CFetchSlow: block until .auction-box appears in the DOM, giving
+	// JS-rendered terms time to paint before we grab the HTML.
+	html, err := CFetchSlow(ctx, url, ".auction-box", 0)
 	if err != nil {
 		return "", "On Schedule"
 	}

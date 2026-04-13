@@ -2,3 +2,4 @@
 .vscode/backend/tmp/
 build-errors.log
 backend/tmp
+/backend/tmp
