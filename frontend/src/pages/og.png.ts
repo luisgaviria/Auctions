@@ -17,7 +17,8 @@ export const GET: APIRoute = async () => {
   const font = await getFont();
 
   const svg = await satori(
-    {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ({
       type: 'div',
       props: {
         style: {
@@ -158,7 +159,7 @@ export const GET: APIRoute = async () => {
           },
         ],
       },
-    },
+    } as any),
     {
       width: 1200,
       height: 630,
