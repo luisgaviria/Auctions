@@ -1,0 +1,17 @@
+{
+  "name": "Auction & Company",
+  "short_name": "Auction & Co",
+  "description": "Upcoming property auctions in Massachusetts — live dates, deposits, and auctioneer details.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
