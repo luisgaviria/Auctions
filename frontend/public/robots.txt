@@ -19,3 +19,5 @@ Allow: /
 
 User-agent: CCBot
 Allow: /
+
+Sitemap: https://auctionandcompany.com/sitemap.xml

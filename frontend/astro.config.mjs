@@ -4,6 +4,7 @@ import svelte from '@astrojs/svelte';
 import vercel from '@astrojs/vercel';
 
 export default defineConfig({
+  site: 'https://auctionandcompany.com',
   adapter: vercel(),
   output: 'server',
   integrations: [react(), svelte()],
