@@ -8,11 +8,14 @@ const pages = [
 ];
 
 export const GET: APIRoute = () => {
+  const today = new Date().toISOString().split('T')[0];
+
   const urls = pages
     .map(
       ({ path, changefreq, priority }) => `
   <url>
     <loc>${SITE}${path}</loc>
+    <lastmod>${today}</lastmod>
     <changefreq>${changefreq}</changefreq>
     <priority>${priority}</priority>
   </url>`
