@@ -112,6 +112,7 @@ func ScrapDean() []Auction {
 					auction.Logo = "/dean.webp"
 					auction.Status = "Active"
 					auction.City = "Massachusetts"
+					auction.Url = url
 					auctions = append(auctions, auction)
 				}
 			})
