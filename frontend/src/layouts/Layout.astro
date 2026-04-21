@@ -65,15 +65,31 @@ const ogImageURL = ogImage ?? `${origin}/og.png`;
     <Font cssVariable="--font-sans" preload />
     <Font cssVariable="--font-mono" preload />
 
-    <!-- Organization structured data -->
-    <script type="application/ld+json" is:inline>{JSON.stringify({
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      "name": "Auction & Company",
-      "url": "https://auctionandcompany.com",
-      "description": "Browse upcoming real estate auctions in Massachusetts. Live bids, dates, deposits, and auctioneer details — updated daily.",
-      "areaServed": { "@type": "State", "name": "Massachusetts" }
-    })}</script>
+    <!-- Organization + WebSite structured data -->
+    <script type="application/ld+json" is:inline>{JSON.stringify([
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Auction & Company",
+        "url": "https://auctionandcompany.com",
+        "description": "Browse upcoming real estate auctions in Massachusetts. Live bids, dates, deposits, and auctioneer details — updated daily.",
+        "areaServed": { "@type": "State", "name": "Massachusetts" }
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Auction & Company",
+        "url": "https://auctionandcompany.com",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "https://auctionandcompany.com/?q={search_term_string}"
+          },
+          "query-input": "required name=search_term_string"
+        }
+      }
+    ])}</script>
 
     <!--
       Zero-flicker dark mode: runs before first paint.
