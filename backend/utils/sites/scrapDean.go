@@ -102,7 +102,21 @@ func ScrapDean() []Auction {
 						auction.Time = strings.TrimSpace(m[2])
 
 					case 2:
-						auction.Street = td.Text
+						raw := strings.TrimSpace(td.Text)
+						// Drop the mortgage registry line — keep only the first line.
+						if idx := strings.IndexByte(raw, '\n'); idx != -1 {
+							raw = strings.TrimSpace(raw[:idx])
+						}
+						auction.Street = raw
+						// Extract city from "STREET, CITY, MA[...]".
+						// Second-to-last comma-separated segment is the town name.
+						parts := strings.Split(raw, ",")
+						if len(parts) >= 3 {
+							city := strings.TrimSpace(parts[len(parts)-2])
+							if city != "" {
+								auction.City = city + ", Massachusetts"
+							}
+						}
 					case 3:
 						auction.Deposit = priceRegex.FindString(td.Text)
 					}
@@ -111,8 +125,10 @@ func ScrapDean() []Auction {
 				if !skipRow {
 					auction.Logo = "/dean.webp"
 					auction.Status = "Active"
-					auction.City = "Massachusetts"
 					auction.Url = url
+					if auction.City == "" {
+						auction.City = "Massachusetts"
+					}
 					auctions = append(auctions, auction)
 				}
 			})
