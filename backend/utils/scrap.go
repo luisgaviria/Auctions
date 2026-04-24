@@ -109,6 +109,11 @@ func CleanStreetAddress(s string) string {
 // Handles edge cases like trailing state abbreviations in parentheses.
 var urlJunkRe = regexp.MustCompile(`(?i)\([^)]*\)|\bMA\s*,?\s*MA\b`)
 
+// streetRangeRe matches a leading street-number range like "61-63" or "2-4"
+// and captures only the first number.  Zillow search cannot resolve ranges —
+// using the lower number produces a valid result for the property.
+var streetRangeRe = regexp.MustCompile(`^(\d+)-\d+\b`)
+
 // NormalizeAddressForURL returns a URL-safe version of the address string:
 // parentheticals stripped, known junk phrases removed, commas dropped, and
 // consecutive whitespace collapsed to single spaces.  The result is suitable
@@ -220,8 +225,11 @@ func buildAuctionURLs(street, city string) (zillowURL, streetViewURL, registryUR
 
 	// Zillow path format: spaces → "+", no commas, "_rb/" suffix for address search.
 	// Example: https://www.zillow.com/homes/90+SUFFOLK+ROAD+NEWTON+MA_rb/
+	// Street-number ranges (e.g. "61-63") are reduced to the first number so
+	// Zillow can resolve the search — "61-63+DEXTER+ST" finds nothing.
+	zillowClean := streetRangeRe.ReplaceAllString(clean, "$1")
 	zillowURL = "https://www.zillow.com/homes/" +
-		strings.ReplaceAll(clean, " ", "+") + "_rb/"
+		strings.ReplaceAll(zillowClean, " ", "+") + "_rb/"
 
 	// Google Maps uses standard percent-encoding for the query parameter.
 	mapsQuery := street
