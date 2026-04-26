@@ -109,6 +109,75 @@ func CleanStreetAddress(s string) string {
 // Handles edge cases like trailing state abbreviations in parentheses.
 var urlJunkRe = regexp.MustCompile(`(?i)\([^)]*\)|\bMA\s*,?\s*MA\b`)
 
+// maTokenRe matches a comma-segment that is exactly the MA state abbreviation,
+// optionally followed by a zip code.  It deliberately does NOT match
+// "MASSACHUSETTS" so that SRI's "…, MA, MASSACHUSETTS" format skips the
+// redundant long-form token and correctly lands on the preceding "MA".
+var maTokenRe = regexp.MustCompile(`(?i)^MA(\s+\d{5}(-\d{4})?)?$`)
+
+// addrTitleCase returns s in title case, e.g. "HAVERHILL" → "Haverhill".
+// Used only for city/street display — stored fields are already uppercased by
+// NormalizeStreet so this is called before that step.
+func addrTitleCase(s string) string {
+	words := strings.Fields(strings.ToLower(s))
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
+}
+
+// CleanAuctionData resolves the correct street and city from a raw scraper
+// address when the city field has been set to a generic "Massachusetts"
+// placeholder.
+//
+// All three address formats used by MA auctioneers share the same structure —
+// the real city always sits one comma-segment to the left of the "MA" token —
+// so a single parser covers every case.  A per-auctioneer switch would add
+// maintenance overhead with no benefit.
+//
+//	Dean:    "1-7 5TH AVENUE, HAVERHILL, MA, PAGE 336"   → "Haverhill"
+//	DanielP: "1600 WEST STREET, STOUGHTON, MA"           → "Stoughton"
+//	SRI:     "174 HAMILTON STREET, SOUTHBRIDGE, MA, MASSACHUSETTS" → "Southbridge"
+//
+// Returns the street (everything before the city segment) and city in title
+// case.  Falls back to rawAddr/rawCity unchanged if no MA token is found.
+func CleanAuctionData(rawAddr, rawCity string) (street, city string) {
+	trimCity := strings.TrimSpace(rawCity)
+
+	// If rawCity is already a specific town, honour it and just strip the
+	// city+state tail from the address so the street field stays clean.
+	isFallback := strings.EqualFold(trimCity, "massachusetts") ||
+		strings.EqualFold(trimCity, "ma") ||
+		trimCity == ""
+
+	parts := strings.Split(rawAddr, ",")
+
+	// Find the index of the "MA" state token scanning right-to-left.
+	maIdx := -1
+	for i := len(parts) - 1; i >= 1; i-- {
+		if maTokenRe.MatchString(strings.TrimSpace(parts[i])) {
+			maIdx = i
+			break
+		}
+	}
+
+	if maIdx <= 0 {
+		// No MA token found — return inputs as-is.
+		return addrTitleCase(strings.TrimSpace(rawAddr)), addrTitleCase(trimCity)
+	}
+
+	parsedCity := addrTitleCase(strings.TrimSpace(parts[maIdx-1]))
+	parsedStreet := addrTitleCase(strings.TrimSpace(strings.Join(parts[:maIdx-1], ",")))
+
+	if isFallback {
+		return parsedStreet, parsedCity
+	}
+	// City was already known — just strip the city+state tail from the street.
+	return parsedStreet, addrTitleCase(trimCity)
+}
+
 // streetRangeRe matches a leading street-number range like "61-63" or "2-4"
 // and captures only the first number.  Zillow search cannot resolve ranges —
 // using the lower number produces a valid result for the property.
@@ -250,6 +319,12 @@ func buildAuctionURLs(street, city string) (zillowURL, streetViewURL, registryUR
 // directly to upsertAuction.
 func NormalizeAuction(a sites.Auction) sites.Auction {
 	a.Street = CleanStreetAddress(strings.TrimSpace(a.Street))
+
+	// Resolve city from the address when the scraper set a generic placeholder.
+	// CleanAuctionData is called before NormalizeStreet so title-cased output
+	// is then uppercased uniformly by NormalizeStreet below.
+	a.Street, a.City = CleanAuctionData(a.Street, a.City)
+
 	a.Street = NormalizeStreet(a.Street)
 	a.City = strings.TrimSpace(a.City)
 	a.Date = normalizeDateToISO(a.Date)
