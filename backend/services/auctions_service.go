@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -121,6 +122,145 @@ func (s *AuctionsService) GetAuctions(limit, offset int) ([]byte, int, error) {
 	}
 	cache.Cache.Set(cacheKey, data, 5*time.Minute)
 	return data, http.StatusOK, nil
+}
+
+// CityMarketSummary is the aggregate badge data returned alongside the auction
+// list for a city landing page.
+type CityMarketSummary struct {
+	City           string `json:"city"`
+	County         string `json:"county"`
+	AuctionCount   int    `json:"auction_count"`
+	AverageDeposit string `json:"average_deposit"` // "$12,500" or "" when unavailable
+}
+
+// CityMarketResponse is the full response shape for GET /auctions/:county_slug/:city_slug.
+type CityMarketResponse struct {
+	Summary  CityMarketSummary    `json:"summary"`
+	Auctions []models.AuctionJSON `json:"auctions"`
+}
+
+// activeFilter is the shared status + date predicate reused across queries.
+const activeFilter = `
+	LOWER(status) NOT IN (
+		'cancelled','sold','removed','canceled',
+		'sold back to mortgagee','back to mortgagee',
+		'past','3rd party purchase','postponed'
+	)
+	AND (date >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York')::date OR date IS NULL)`
+
+// GetAuctionsBySlug returns all active auctions for a specific city+county slug
+// pair together with a summary object (count, average deposit, display names).
+// Returns 404 when the slug combination has no active auctions.
+func (s *AuctionsService) GetAuctionsBySlug(countySlug, citySlug string) ([]byte, int, error) {
+	// ── 1. Summary aggregate ────────────────────────────────────────────────
+	const summaryQ = `
+		SELECT
+			MAX(city)                                                          AS city_name,
+			COUNT(*)                                                           AS auction_count,
+			ROUND(AVG(
+				NULLIF(REGEXP_REPLACE(deposit, '[^0-9]', '', 'g'), '')::numeric
+			))                                                                 AS avg_deposit
+		FROM auctions
+		WHERE county_slug = $1
+		  AND city_slug   = $2
+		  AND ` + activeFilter
+
+	var cityName string
+	var count int
+	var avgDeposit sql.NullFloat64
+
+	if err := s.DB.QueryRow(summaryQ, countySlug, citySlug).
+		Scan(&cityName, &count, &avgDeposit); err != nil {
+		log.Printf("[slug] summary query error county=%s city=%s: %v", countySlug, citySlug, err)
+		return nil, http.StatusInternalServerError, err
+	}
+
+	if count == 0 {
+		return nil, http.StatusNotFound, fmt.Errorf("no active auctions found for %s/%s", countySlug, citySlug)
+	}
+
+	// Format average deposit as "$12,500" when data is available.
+	avgDepositStr := ""
+	if avgDeposit.Valid && avgDeposit.Float64 > 0 {
+		avgDepositStr = fmt.Sprintf("$%s", formatWithCommas(int(avgDeposit.Float64)))
+	}
+
+	// Derive display county name from slug: "worcester-county" → "Worcester County"
+	countyDisplay := slugToDisplay(countySlug)
+
+	summary := CityMarketSummary{
+		City:           cityName,
+		County:         countyDisplay,
+		AuctionCount:   count,
+		AverageDeposit: avgDepositStr,
+	}
+
+	// ── 2. Auction rows ─────────────────────────────────────────────────────
+	const rowsQ = `
+		SELECT ` + auctionCols + `
+		FROM auctions
+		WHERE county_slug = $1
+		  AND city_slug   = $2
+		  AND ` + activeFilter + `
+		ORDER BY date ASC NULLS LAST, time ASC NULLS LAST`
+
+	rows, err := s.DB.Query(rowsQ, countySlug, citySlug)
+	if err != nil {
+		log.Printf("[slug] rows query error: %v", err)
+		return nil, http.StatusInternalServerError, err
+	}
+	defer rows.Close()
+
+	auctions := make([]models.AuctionJSON, 0, count)
+	for rows.Next() {
+		var a models.AuctionModel
+		if err := rows.Scan(
+			&a.Id, &a.Address, &a.City, &a.State, &a.Time, &a.Logo,
+			&a.Status, &a.Link, &a.Date, &a.Deposit, &a.Lat, &a.Lng,
+			&a.Createdat, &a.SiteName, &a.UpdatedAt, &a.LastSeen,
+			&a.ZillowURL, &a.StreetViewURL, &a.RegistryURL,
+		); err != nil {
+			log.Printf("[slug] scan error: %v", err)
+			return nil, http.StatusInternalServerError, err
+		}
+		auctions = append(auctions, a.ToJSON())
+	}
+	if err := rows.Err(); err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	data, err := json.Marshal(CityMarketResponse{Summary: summary, Auctions: auctions})
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	return data, http.StatusOK, nil
+}
+
+// formatWithCommas turns 12500 into "12,500".
+func formatWithCommas(n int) string {
+	s := fmt.Sprintf("%d", n)
+	if len(s) <= 3 {
+		return s
+	}
+	var result []byte
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			result = append(result, ',')
+		}
+		result = append(result, byte(c))
+	}
+	return string(result)
+}
+
+// slugToDisplay converts "worcester-county" → "Worcester County".
+func slugToDisplay(slug string) string {
+	words := strings.Split(slug, "-")
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 // GetAuctionsInBounds returns auctions whose coordinates fall within the given

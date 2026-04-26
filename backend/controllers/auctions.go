@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"net/http"
 	"strconv"
+
+	"github.com/gorilla/mux"
 )
 
 type AuctionsController struct {
@@ -62,6 +64,25 @@ func (c *AuctionsController) GetAuctions(w http.ResponseWriter, req *http.Reques
 		w.Write([]byte(err.Error()))
 		return
 	}
+	w.WriteHeader(status)
+	w.Write(data)
+}
+
+// GetAuctionsBySlug handles GET /auctions/{county_slug}/{city_slug}.
+// Returns active auctions for the given city together with a summary badge
+// (count + average deposit).  404 when the slug pair has no active auctions.
+func (c *AuctionsController) GetAuctionsBySlug(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	countySlug := vars["county_slug"]
+	citySlug := vars["city_slug"]
+
+	service := services.NewAuctionsService(c.DB)
+	data, status, err := service.GetAuctionsBySlug(countySlug, citySlug)
+	if err != nil {
+		http.Error(w, err.Error(), status)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	w.Write(data)
 }
