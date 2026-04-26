@@ -81,6 +81,7 @@ func main() {
 	auctionController := controllers.AuctionsController{DB: db}
 	favoritesController := controllers.FavoritesController{DB: db}
 	scrapingController := controllers.ScrapingController{DB: db}
+	locationsController := controllers.LocationsController{DB: db}
 
 	// Auth routes
 	authSubrouter := router.PathPrefix("/auth").Subrouter()
@@ -96,6 +97,11 @@ func main() {
 
 	// Report routes
 	router.HandleFunc("/report/{address_slug}", auctionController.GetReport).Methods("GET", "OPTIONS")
+
+	// Locations directory routes
+	locationsSubrouter := router.PathPrefix("/locations").Subrouter()
+	locationsSubrouter.HandleFunc("/counties", locationsController.GetCounties).Methods("GET", "OPTIONS")
+	locationsSubrouter.HandleFunc("/counties/{county_slug}/cities", locationsController.GetCitiesByCounty).Methods("GET", "OPTIONS")
 
 	// Favorites routes
 	favoritesSubrouter := router.PathPrefix("/favorites").Subrouter()

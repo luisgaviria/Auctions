@@ -1,0 +1,137 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Breadcrumb from '../../components/Breadcrumb.astro';
+
+export const prerender = false;
+
+const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+
+let counties: { county_slug: string; county: string; auction_count: number }[] = [];
+
+try {
+  const res = await fetch(`${apiUrl}/locations/counties`);
+  if (res.ok) {
+    const data = await res.json();
+    counties = data.counties ?? [];
+  }
+} catch (_) {}
+
+const totalAuctions = counties.reduce((sum, c) => sum + c.auction_count, 0);
+
+const crumbs = [
+  { label: 'Home', href: '/' },
+  { label: 'Massachusetts' },
+];
+
+const description = `Browse ${totalAuctions} upcoming property auctions across ${counties.length} Massachusetts counties. Find real estate foreclosure auctions by county and city — updated daily.`;
+---
+
+<Layout
+  title="Massachusetts Property Auctions by County"
+  description={description}
+  canonical={`${Astro.url.origin}/massachusetts`}
+>
+  <div class="dir-page">
+    <div class="container">
+
+      <Breadcrumb crumbs={crumbs} />
+
+      <header class="dir-hero">
+        <h1>Massachusetts Property Auctions</h1>
+        <p class="dir-subtitle">
+          {totalAuctions} active auction{totalAuctions === 1 ? '' : 's'} across {counties.length} {counties.length === 1 ? 'county' : 'counties'}
+        </p>
+      </header>
+
+      {counties.length === 0 ? (
+        <p class="empty-state">No active auctions right now. <a href="/">Browse all</a>.</p>
+      ) : (
+        <ul class="county-list">
+          {counties.map((c) => (
+            <li>
+              <a href={`/massachusetts/${c.county_slug}`} class="county-row">
+                <span class="county-name">{c.county}</span>
+                <span class="county-count">{c.auction_count} auction{c.auction_count === 1 ? '' : 's'}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .dir-page {
+    padding-top: var(--spacing-2xl);
+    padding-bottom: var(--spacing-2xl);
+  }
+
+  .dir-hero {
+    margin-bottom: var(--spacing-2xl);
+  }
+
+  .dir-hero h1 {
+    font-size: 2rem;
+    letter-spacing: -0.03em;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .dir-subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.9375rem;
+  }
+
+  .county-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .county-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    text-decoration: none;
+    color: var(--color-text-primary);
+    transition: background 0.12s ease, border-color 0.12s ease;
+    background: var(--color-surface);
+  }
+
+  .county-row:hover {
+    background: var(--color-surface-raised);
+    border-color: var(--color-border-subtle);
+  }
+
+  .county-name {
+    font-weight: 500;
+    font-size: 0.9375rem;
+  }
+
+  .county-count {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: var(--spacing-2xl);
+    color: var(--color-text-secondary);
+  }
+
+  .empty-state a {
+    color: var(--color-accent);
+    text-decoration: underline;
+  }
+
+  @media (max-width: 640px) {
+    .dir-hero h1 { font-size: 1.5rem; }
+  }
+</style>

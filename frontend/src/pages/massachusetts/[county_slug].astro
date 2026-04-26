@@ -1,0 +1,147 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Breadcrumb from '../../components/Breadcrumb.astro';
+
+export const prerender = false;
+
+const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+const { county_slug } = Astro.params;
+
+type CityRow = { city_slug: string; city: string; county_slug: string; auction_count: number };
+
+let countyDisplay = '';
+let cities: CityRow[] = [];
+
+try {
+  const res = await fetch(`${apiUrl}/locations/counties/${county_slug}/cities`);
+  if (res.status === 404) {
+    return Astro.redirect('/404', 302);
+  }
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  const data = await res.json();
+  countyDisplay = data.county ?? '';
+  cities = data.cities ?? [];
+} catch (_) {
+  return new Response(null, { status: 502, statusText: 'Bad Gateway' });
+}
+
+const totalAuctions = cities.reduce((sum, c) => sum + c.auction_count, 0);
+
+const crumbs = [
+  { label: 'Home',          href: '/' },
+  { label: 'Massachusetts', href: '/massachusetts' },
+  { label: countyDisplay },
+];
+
+const description = `Browse ${totalAuctions} upcoming property auction${totalAuctions === 1 ? '' : 's'} across ${cities.length} cit${cities.length === 1 ? 'y' : 'ies'} in ${countyDisplay}, Massachusetts. Updated daily.`;
+---
+
+<Layout
+  title={`${countyDisplay} Property Auctions`}
+  description={description}
+  canonical={`${Astro.url.origin}/massachusetts/${county_slug}`}
+>
+  <div class="dir-page">
+    <div class="container">
+
+      <Breadcrumb crumbs={crumbs} />
+
+      <header class="dir-hero">
+        <h1>{countyDisplay} Property Auctions</h1>
+        <p class="dir-subtitle">
+          {totalAuctions} active auction{totalAuctions === 1 ? '' : 's'} across {cities.length} {cities.length === 1 ? 'city' : 'cities'}
+        </p>
+      </header>
+
+      {cities.length === 0 ? (
+        <p class="empty-state">No active auctions in {countyDisplay} right now. <a href="/massachusetts">View all counties</a>.</p>
+      ) : (
+        <ul class="city-list">
+          {cities.map((c) => (
+            <li>
+              <a href={`/massachusetts/${county_slug}/${c.city_slug}`} class="city-row">
+                <span class="city-name">{c.city}</span>
+                <span class="city-count">{c.auction_count} auction{c.auction_count === 1 ? '' : 's'}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .dir-page {
+    padding-top: var(--spacing-2xl);
+    padding-bottom: var(--spacing-2xl);
+  }
+
+  .dir-hero {
+    margin-bottom: var(--spacing-2xl);
+  }
+
+  .dir-hero h1 {
+    font-size: 2rem;
+    letter-spacing: -0.03em;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .dir-subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.9375rem;
+  }
+
+  .city-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .city-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    text-decoration: none;
+    color: var(--color-text-primary);
+    background: var(--color-surface);
+    transition: background 0.12s ease, border-color 0.12s ease;
+  }
+
+  .city-row:hover {
+    background: var(--color-surface-raised);
+    border-color: var(--color-border-subtle);
+  }
+
+  .city-name {
+    font-weight: 500;
+    font-size: 0.9375rem;
+  }
+
+  .city-count {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: var(--spacing-2xl);
+    color: var(--color-text-secondary);
+  }
+
+  .empty-state a {
+    color: var(--color-accent);
+    text-decoration: underline;
+  }
+
+  @media (max-width: 640px) {
+    .dir-hero h1 { font-size: 1.5rem; }
+  }
+</style>

@@ -16,10 +16,11 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
     <!-- Right: links + actions (desktop) -->
     <div class="nav-right">
       <nav class="nav-links" aria-label="Site navigation">
-        <a href="/"          class={`nav-link${isActive('/')         ? ' active' : ''}`}>Home</a>
-        <a href="/favorites" class={`nav-link${isActive('/favorites')? ' active' : ''}`}
+        <a href="/"              class={`nav-link${isActive('/')              ? ' active' : ''}`}>Home</a>
+        <a href="/massachusetts" class={`nav-link${isActive('/massachusetts') ? ' active' : ''}`}>Directory</a>
+        <a href="/favorites"     class={`nav-link${isActive('/favorites')     ? ' active' : ''}`}
            id="favLink" style="display:none">Favorites</a>
-        <a href="/about"     class={`nav-link${isActive('/about')    ? ' active' : ''}`}>About</a>
+        <a href="/about"         class={`nav-link${isActive('/about')         ? ' active' : ''}`}>About</a>
       </nav>
 
       <div class="nav-actions">
@@ -45,14 +46,17 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
   <!-- Mobile menu dropdown -->
   <div class="mobile-menu" id="mobileMenu" hidden aria-hidden="true">
     <nav aria-label="Mobile navigation">
-      <a href="/"          class={`mobile-link${isActive('/')         ? ' active' : ''}`}>
+      <a href="/"              class={`mobile-link${isActive('/')              ? ' active' : ''}`}>
         <svg class="icon" aria-hidden="true"><use href="#icon-home"></use></svg> Home
       </a>
-      <a href="/favorites" class={`mobile-link${isActive('/favorites')? ' active' : ''}`}
+      <a href="/massachusetts" class={`mobile-link${isActive('/massachusetts') ? ' active' : ''}`}>
+        <svg class="icon" aria-hidden="true"><use href="#icon-list"></use></svg> Directory
+      </a>
+      <a href="/favorites"     class={`mobile-link${isActive('/favorites')     ? ' active' : ''}`}
          id="mobFavLink" style="display:none">
         <svg class="icon" aria-hidden="true"><use href="#icon-heart-o"></use></svg> Favorites
       </a>
-      <a href="/about"     class={`mobile-link${isActive('/about')    ? ' active' : ''}`}>
+      <a href="/about"         class={`mobile-link${isActive('/about')         ? ' active' : ''}`}>
         <svg class="icon" aria-hidden="true"><use href="#icon-info-circle"></use></svg> About
       </a>
     </nav>
