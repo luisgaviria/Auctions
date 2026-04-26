@@ -12,12 +12,14 @@ type Auction struct {
 	Logo        string
 	Url         string
 	SiteName    string // identifies the source scraper, e.g. "baystate"
-	ZillowURL     string
-	StreetViewURL string
-	RegistryURL   string
-	CitySlug      string
-	CountySlug    string
-	AddressSlug   string
+	ZillowURL        string
+	StreetViewURL    string
+	RegistryURL      string
+	CitySlug         string
+	CountySlug       string
+	AddressSlug      string
+	LegalDescription string // raw Book/Page citation from the notice, e.g. "B13812/P506"
+	RegistryDeepLink string // computed masslandrecords.com deep link (book+page pre-filled)
 }
 
 func (auction *Auction) Print() {

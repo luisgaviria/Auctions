@@ -65,6 +65,11 @@ ALTER TABLE auctions ADD COLUMN IF NOT EXISTS zillow_url      TEXT;
 ALTER TABLE auctions ADD COLUMN IF NOT EXISTS street_view_url TEXT;
 ALTER TABLE auctions ADD COLUMN IF NOT EXISTS registry_url    TEXT;`
 
+var addDeepLinkColumns = `
+ALTER TABLE auctions ADD COLUMN IF NOT EXISTS legal_description  TEXT;
+ALTER TABLE auctions ADD COLUMN IF NOT EXISTS registry_deep_link TEXT;
+ALTER TABLE auctions ADD COLUMN IF NOT EXISTS assessor_pid       TEXT;`
+
 func InitTables(db *sql.DB) {
 	pingErr := db.Ping()
 	if pingErr != nil {
@@ -98,6 +103,12 @@ func InitTables(db *sql.DB) {
 	if err != nil {
 		log.Fatal(err.Error())
 		panic("Migration 007 failed: add zillow_url / street_view_url / registry_url columns")
+	}
+
+	_, err = db.Exec(addDeepLinkColumns)
+	if err != nil {
+		log.Fatal(err.Error())
+		panic("Migration 010 failed: add legal_description / registry_deep_link / assessor_pid columns")
 	}
 
 	log.Print("Succesfully initialized tables!")

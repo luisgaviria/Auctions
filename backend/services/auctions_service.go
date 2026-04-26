@@ -31,7 +31,7 @@ type GetAuctionsResponse struct {
 // never breaks the scan regardless of migration order across environments.
 const auctionCols = `id, address, city, state, time, logo, status, link,
 	date, deposit, lat, lng, "createdAt", site_name, updated_at, last_seen,
-	zillow_url, street_view_url, registry_url`
+	zillow_url, street_view_url, registry_url, assessor_pid, registry_deep_link`
 
 // selectFilteredAuctions excludes terminal/past statuses, drops past-dated rows,
 // and sorts upcoming auctions chronologically.
@@ -101,6 +101,8 @@ func (s *AuctionsService) GetAuctions(limit, offset int) ([]byte, int, error) {
 			&auction.ZillowURL,
 			&auction.StreetViewURL,
 			&auction.RegistryURL,
+			&auction.AssessorPID,
+			&auction.RegistryDeepLink,
 		); err != nil {
 			log.Printf("Error scanning auction: %v\n", err)
 			return nil, http.StatusInternalServerError, err
@@ -239,6 +241,7 @@ func (s *AuctionsService) GetAuctionsBySlug(countySlug, citySlug string) ([]byte
 			&a.Status, &a.Link, &a.Date, &a.Deposit, &a.Lat, &a.Lng,
 			&a.Createdat, &a.SiteName, &a.UpdatedAt, &a.LastSeen,
 			&a.ZillowURL, &a.StreetViewURL, &a.RegistryURL,
+			&a.AssessorPID, &a.RegistryDeepLink,
 		); err != nil {
 			log.Printf("[slug] scan error: %v", err)
 			return nil, http.StatusInternalServerError, err
@@ -363,6 +366,7 @@ func (s *AuctionsService) GetAuctionReport(addressSlug string) ([]byte, int, err
 		&a.Status, &a.Link, &a.Date, &a.Deposit, &a.Lat, &a.Lng,
 		&a.Createdat, &a.SiteName, &a.UpdatedAt, &a.LastSeen,
 		&a.ZillowURL, &a.StreetViewURL, &a.RegistryURL,
+		&a.AssessorPID, &a.RegistryDeepLink,
 		&scannedSlug,
 	)
 	if err == sql.ErrNoRows {
@@ -390,6 +394,9 @@ func (s *AuctionsService) GetAuctionReport(addressSlug string) ([]byte, int, err
 		}
 	}
 
+	// Build full VGSI assessor URL from the stored PID, if available.
+	assessorURL := utils.BuildAssessorURL(auctionJSON.City, auctionJSON.AssessorPID)
+
 	checklist := buildChecklist(auctionJSON)
 	shareURL := "https://auctionandcompany.com/report/" + addressSlug
 
@@ -398,6 +405,7 @@ func (s *AuctionsService) GetAuctionReport(addressSlug string) ([]byte, int, err
 		Checklist:   checklist,
 		ShareURL:    shareURL,
 		AddressSlug: scannedSlug,
+		AssessorURL: assessorURL,
 	}
 
 	data, err := json.Marshal(report)
@@ -481,6 +489,8 @@ func (s *AuctionsService) GetAuctionsInBounds(south, north, west, east float64) 
 			&auction.ZillowURL,
 			&auction.StreetViewURL,
 			&auction.RegistryURL,
+			&auction.AssessorPID,
+			&auction.RegistryDeepLink,
 		); err != nil {
 			log.Printf("Error scanning auction (bbox): %v\n", err)
 			return nil, http.StatusInternalServerError, err

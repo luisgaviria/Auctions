@@ -61,7 +61,13 @@ func ScrapSri() []Auction {
 			address = strings.TrimSpace(address)
 		}
 
-		// Remove deed-registry citations (e.g. "B13812/P506") before further parsing.
+		// Capture deed-registry citation before stripping it from the address.
+		// "B13812/P506" becomes the LegalDescription for the deep-link builder.
+		var legalDesc string
+		if m := sriRegistryRe.FindString(address); m != "" {
+			legalDesc = strings.TrimSpace(strings.TrimLeft(m, ", "))
+		}
+		// Remove deed-registry citations from the street address string.
 		address = strings.TrimRight(strings.TrimSpace(sriRegistryRe.ReplaceAllString(address, "")), ",")
 
 		// If the city name appears inside the address cell (some rows embed the
@@ -79,14 +85,15 @@ func ScrapSri() []Auction {
 		_ = state // state is excluded from the street field
 
 		data = append(data, Auction{
-			Logo:    logo,
-			Date:    date,
-			Time:    time,
-			Street:  address,
-			City:    city,
-			Status:  status,
-			Deposit: deposit,
-			Url:     url,
+			Logo:             logo,
+			Date:             date,
+			Time:             time,
+			Street:           address,
+			City:             city,
+			Status:           status,
+			Deposit:          deposit,
+			Url:              url,
+			LegalDescription: legalDesc,
 		})
 	})
 

@@ -26,26 +26,31 @@ import (
 var upsertAuctionSQL = `
 	INSERT INTO auctions
 		(address, city, state, time, logo, site_name, status, link, date, deposit, lat, lng,
-		 zillow_url, street_view_url, registry_url, last_seen, city_slug, county_slug, address_slug)
+		 zillow_url, street_view_url, registry_url, last_seen, city_slug, county_slug, address_slug,
+		 legal_description, registry_deep_link, assessor_pid)
 	VALUES
-		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), $16, $17, $18)
+		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), $16, $17, $18,
+		 $19, $20, $21)
 	ON CONFLICT ON CONSTRAINT uq_auctions_address_site DO UPDATE
 		SET
-			status          = CASE WHEN auctions.status  IS DISTINCT FROM EXCLUDED.status
-			                       THEN EXCLUDED.status  ELSE auctions.status  END,
-			date            = COALESCE(EXCLUDED.date, auctions.date),
-			deposit         = CASE WHEN auctions.deposit IS DISTINCT FROM EXCLUDED.deposit
-			                       THEN EXCLUDED.deposit ELSE auctions.deposit END,
-			time            = EXCLUDED.time,
-			link            = EXCLUDED.link,
-			zillow_url      = EXCLUDED.zillow_url,
-			street_view_url = EXCLUDED.street_view_url,
-			registry_url    = EXCLUDED.registry_url,
-			city_slug       = EXCLUDED.city_slug,
-			county_slug     = EXCLUDED.county_slug,
-			address_slug    = EXCLUDED.address_slug,
-			last_seen       = EXCLUDED.last_seen,
-			updated_at      = NOW()
+			status            = CASE WHEN auctions.status  IS DISTINCT FROM EXCLUDED.status
+			                         THEN EXCLUDED.status  ELSE auctions.status  END,
+			date              = COALESCE(EXCLUDED.date, auctions.date),
+			deposit           = CASE WHEN auctions.deposit IS DISTINCT FROM EXCLUDED.deposit
+			                         THEN EXCLUDED.deposit ELSE auctions.deposit END,
+			time              = EXCLUDED.time,
+			link              = EXCLUDED.link,
+			zillow_url        = EXCLUDED.zillow_url,
+			street_view_url   = EXCLUDED.street_view_url,
+			registry_url      = EXCLUDED.registry_url,
+			city_slug         = EXCLUDED.city_slug,
+			county_slug       = EXCLUDED.county_slug,
+			address_slug      = EXCLUDED.address_slug,
+			legal_description = EXCLUDED.legal_description,
+			registry_deep_link = COALESCE(EXCLUDED.registry_deep_link, auctions.registry_deep_link),
+			assessor_pid      = COALESCE(EXCLUDED.assessor_pid,       auctions.assessor_pid),
+			last_seen         = EXCLUDED.last_seen,
+			updated_at        = NOW()
 	RETURNING id;`
 
 // sweepStaleSQL hard-deletes rows that have not been seen by any scraper in the
@@ -364,6 +369,13 @@ func NormalizeAuction(a sites.Auction) sites.Auction {
 	a.Status = normalizeStatus(a.Status)
 	a.Time = normalizeTime(a.Time)
 	a.ZillowURL, a.StreetViewURL, a.RegistryURL = buildAuctionURLs(a.Street, a.City)
+
+	// Build registry deep link if the scraper provided a legal description.
+	if a.LegalDescription != "" {
+		book, page := ExtractBookPage(a.LegalDescription)
+		a.RegistryDeepLink = BuildRegistryDeepLink(a.City, book, page)
+	}
+
 	a.CitySlug = GenerateSlug(a.City)
 	county := GetCounty(a.City)
 	if county != "" {
@@ -524,12 +536,15 @@ func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 		a.Deposit,       // $10 deposit
 		"0",             // $11 lat
 		"0",             // $12 lng
-		a.ZillowURL,     // $13 zillow_url
-		a.StreetViewURL, // $14 street_view_url
-		a.RegistryURL,   // $15 registry_url
-		a.CitySlug,      // $16 city_slug
-		a.CountySlug,    // $17 county_slug
-		a.AddressSlug,   // $18 address_slug
+		a.ZillowURL,         // $13 zillow_url
+		a.StreetViewURL,     // $14 street_view_url
+		a.RegistryURL,       // $15 registry_url
+		a.CitySlug,          // $16 city_slug
+		a.CountySlug,        // $17 county_slug
+		a.AddressSlug,       // $18 address_slug
+		a.LegalDescription,  // $19 legal_description
+		a.RegistryDeepLink,  // $20 registry_deep_link
+		nil,                 // $21 assessor_pid (set by second-pass)
 	).Scan(&id)
 	if err != nil {
 		log.Printf("[upsert] error for %q (%s): %v", a.Street, a.SiteName, err)
@@ -999,5 +1014,12 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 	// Runs once after ALL sites have upserted so a single failing scraper
 	// does not prematurely delete its auctions.
 	sweepStaleAuctions(ctx, db)
+
+	// Assessor second pass — fetch VGSI PIDs for rows that don't have one yet.
+	// Uses a short-timeout child context so a slow VGSI site cannot block forever.
+	assessorCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	RunAssessorSecondPass(assessorCtx, db)
+
 	log.Printf("[scraper] run complete")
 }

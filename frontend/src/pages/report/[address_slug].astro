@@ -1,0 +1,500 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Breadcrumb from '../../components/Breadcrumb.astro';
+
+export const prerender = false;
+
+const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+const { address_slug } = Astro.params;
+
+type ChecklistItem = { task: string; category: string };
+
+type Report = {
+  auction: {
+    id: number;
+    address: string;
+    city: string;
+    state: string;
+    date: string;
+    time: string;
+    deposit: string;
+    status: string;
+    site_name: string;
+    link: string;
+    logo: string;
+    zillow_url: string;
+    street_view_url: string;
+    registry_url: string;
+    registry_deep_link?: string;
+    assessor_pid?: string;
+  };
+  checklist: ChecklistItem[];
+  share_url: string;
+  address_slug: string;
+  assessor_url?: string;
+};
+
+let report: Report | null = null;
+
+try {
+  const res = await fetch(`${apiUrl}/report/${address_slug}`);
+  if (res.status === 404) return Astro.redirect('/404', 302);
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  report = await res.json();
+} catch (_) {
+  return new Response(null, { status: 502, statusText: 'Bad Gateway' });
+}
+
+const { auction, checklist, share_url, assessor_url } = report!;
+
+function titleCase(s: string) {
+  return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+const cityDisplay = titleCase(auction.city);
+const pageTitle   = `Due Diligence Report — ${titleCase(auction.address)}, ${cityDisplay}`;
+const description = `Property report for ${auction.address}, ${cityDisplay}, MA. Auction date: ${auction.date || 'TBD'}. Deposit: ${auction.deposit || 'TBD'}. Includes assessor, registry, and Zillow links.`;
+
+const crumbs = [
+  { label: 'Home', href: '/' },
+  { label: 'Report' },
+  { label: titleCase(auction.address) },
+];
+
+// Group checklist items by category preserving first-seen order.
+const categories: string[] = [];
+const grouped: Record<string, ChecklistItem[]> = {};
+for (const item of checklist) {
+  if (!grouped[item.category]) {
+    categories.push(item.category);
+    grouped[item.category] = [];
+  }
+  grouped[item.category].push(item);
+}
+
+// Registry button: prefer deep link (book/page) over portal link.
+const registryHref = auction.registry_deep_link || auction.registry_url || '#';
+const registryIsDeep = Boolean(auction.registry_deep_link);
+---
+
+<Layout title={pageTitle} description={description} canonical={`${Astro.url.origin}/report/${address_slug}`}>
+  <div class="report-page">
+    <div class="container">
+
+      <Breadcrumb crumbs={crumbs} />
+
+      <!-- Property header -------------------------------------------------->
+      <header class="report-hero">
+        <div class="report-address">
+          <h1>{titleCase(auction.address)}</h1>
+          <p class="report-location">{cityDisplay}, Massachusetts</p>
+        </div>
+        <div class="report-badges">
+          {auction.date && (
+            <div class="badge">
+              <span class="badge-value">{auction.date}</span>
+              <span class="badge-label">Auction Date</span>
+            </div>
+          )}
+          {auction.time && (
+            <div class="badge">
+              <span class="badge-value">{auction.time}</span>
+              <span class="badge-label">Time</span>
+            </div>
+          )}
+          {auction.deposit && (
+            <div class="badge badge-deposit">
+              <span class="badge-value">{auction.deposit}</span>
+              <span class="badge-label">Deposit</span>
+            </div>
+          )}
+        </div>
+      </header>
+
+      <!-- Deep-link action buttons ----------------------------------------->
+      <section class="report-actions">
+        <h2 class="section-title">Research Tools</h2>
+        <div class="action-grid">
+
+          <a href={auction.zillow_url} target="_blank" rel="noopener" class="action-card">
+            <span class="action-icon">🏠</span>
+            <div class="action-body">
+              <span class="action-label">Zillow</span>
+              <span class="action-desc">Market value estimate</span>
+            </div>
+            <svg class="action-arrow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M5.22 14.78a.75.75 0 001.06 0l7.5-7.5a.75.75 0 00-1.06-1.06L5.22 13.72a.75.75 0 000 1.06z" clip-rule="evenodd"/>
+              <path fill-rule="evenodd" d="M6.28 6.22a.75.75 0 00-1.06 1.06l7.5 7.5a.75.75 0 001.06-1.06l-7.5-7.5z" clip-rule="evenodd"/>
+            </svg>
+          </a>
+
+          <a href={auction.street_view_url} target="_blank" rel="noopener" class="action-card">
+            <span class="action-icon">📍</span>
+            <div class="action-body">
+              <span class="action-label">Street View</span>
+              <span class="action-desc">Google Maps visual inspection</span>
+            </div>
+            <svg class="action-arrow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M5.22 14.78a.75.75 0 001.06 0l7.5-7.5a.75.75 0 00-1.06-1.06L5.22 13.72a.75.75 0 000 1.06z" clip-rule="evenodd"/>
+              <path fill-rule="evenodd" d="M6.28 6.22a.75.75 0 00-1.06 1.06l7.5 7.5a.75.75 0 001.06-1.06l-7.5-7.5z" clip-rule="evenodd"/>
+            </svg>
+          </a>
+
+          <a href={registryHref} target="_blank" rel="noopener" class={`action-card${registryIsDeep ? ' action-card--deep' : ''}`}>
+            <span class="action-icon">📜</span>
+            <div class="action-body">
+              <span class="action-label">Registry of Deeds</span>
+              <span class="action-desc">
+                {registryIsDeep ? 'Direct book/page record' : 'County deeds portal'}
+              </span>
+            </div>
+            {registryIsDeep && <span class="deep-badge">Book/Page</span>}
+            <svg class="action-arrow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M5.22 14.78a.75.75 0 001.06 0l7.5-7.5a.75.75 0 00-1.06-1.06L5.22 13.72a.75.75 0 000 1.06z" clip-rule="evenodd"/>
+              <path fill-rule="evenodd" d="M6.28 6.22a.75.75 0 00-1.06 1.06l7.5 7.5a.75.75 0 001.06-1.06l-7.5-7.5z" clip-rule="evenodd"/>
+            </svg>
+          </a>
+
+          {assessor_url ? (
+            <a href={assessor_url} target="_blank" rel="noopener" class="action-card action-card--deep">
+              <span class="action-icon">🏛</span>
+              <div class="action-body">
+                <span class="action-label">Assessor Card</span>
+                <span class="action-desc">Direct parcel detail</span>
+              </div>
+              <span class="deep-badge">Deep Link</span>
+              <svg class="action-arrow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M5.22 14.78a.75.75 0 001.06 0l7.5-7.5a.75.75 0 00-1.06-1.06L5.22 13.72a.75.75 0 000 1.06z" clip-rule="evenodd"/>
+                <path fill-rule="evenodd" d="M6.28 6.22a.75.75 0 00-1.06 1.06l7.5 7.5a.75.75 0 001.06-1.06l-7.5-7.5z" clip-rule="evenodd"/>
+              </svg>
+            </a>
+          ) : (
+            <a href={`https://www.google.com/search?q=${encodeURIComponent(titleCase(auction.address) + ' ' + cityDisplay + ' MA assessor')}`}
+               target="_blank" rel="noopener" class="action-card action-card--muted">
+              <span class="action-icon">🏛</span>
+              <div class="action-body">
+                <span class="action-label">Assessor Card</span>
+                <span class="action-desc">Search for assessor record</span>
+              </div>
+              <svg class="action-arrow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M5.22 14.78a.75.75 0 001.06 0l7.5-7.5a.75.75 0 00-1.06-1.06L5.22 13.72a.75.75 0 000 1.06z" clip-rule="evenodd"/>
+                <path fill-rule="evenodd" d="M6.28 6.22a.75.75 0 00-1.06 1.06l7.5 7.5a.75.75 0 001.06-1.06l-7.5-7.5z" clip-rule="evenodd"/>
+              </svg>
+            </a>
+          )}
+
+          <a href={auction.link} target="_blank" rel="noopener" class="action-card">
+            <span class="action-icon">🔨</span>
+            <div class="action-body">
+              <span class="action-label">Auctioneer Listing</span>
+              <span class="action-desc">Official auction terms &amp; details</span>
+            </div>
+            <svg class="action-arrow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M5.22 14.78a.75.75 0 001.06 0l7.5-7.5a.75.75 0 00-1.06-1.06L5.22 13.72a.75.75 0 000 1.06z" clip-rule="evenodd"/>
+              <path fill-rule="evenodd" d="M6.28 6.22a.75.75 0 00-1.06 1.06l7.5 7.5a.75.75 0 001.06-1.06l-7.5-7.5z" clip-rule="evenodd"/>
+            </svg>
+          </a>
+
+        </div>
+      </section>
+
+      <!-- Due diligence checklist ------------------------------------------>
+      <section class="checklist-section">
+        <h2 class="section-title">Due Diligence Checklist</h2>
+        <div class="checklist-groups">
+          {categories.map((cat) => (
+            <div class="checklist-group">
+              <h3 class="checklist-category">{cat}</h3>
+              <ul class="checklist-items">
+                {grouped[cat].map((item) => (
+                  <li class="checklist-item">
+                    <span class="check-box" aria-hidden="true"></span>
+                    <span class="check-text">{item.task}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <!-- Share bar --------------------------------------------------------->
+      <div class="share-bar">
+        <span class="share-label">Share this report:</span>
+        <button class="share-btn" id="copyShareURL" data-url={share_url}>
+          Copy Link
+        </button>
+      </div>
+
+    </div>
+  </div>
+</Layout>
+
+<script>
+  const btn = document.getElementById('copyShareURL') as HTMLButtonElement | null;
+  btn?.addEventListener('click', async () => {
+    const url = btn.dataset.url ?? window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Copy Link'; }, 2000);
+    } catch (_) {
+      btn.textContent = 'Copy failed';
+    }
+  });
+</script>
+
+<style>
+  .report-page {
+    padding-top: var(--spacing-2xl);
+    padding-bottom: var(--spacing-2xl);
+  }
+
+  /* ── Hero ── */
+  .report-hero {
+    margin-bottom: var(--spacing-2xl);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--spacing-xl);
+    justify-content: space-between;
+  }
+
+  .report-address h1 {
+    font-size: 1.75rem;
+    letter-spacing: -0.03em;
+    margin-bottom: 0.25rem;
+  }
+
+  .report-location {
+    color: var(--color-text-muted);
+    font-size: 0.9375rem;
+  }
+
+  .report-badges {
+    display: flex;
+    gap: var(--spacing-md);
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md) var(--spacing-lg);
+    min-width: 100px;
+  }
+
+  .badge-deposit {
+    border-color: var(--color-accent);
+  }
+
+  .badge-value {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--color-accent);
+    letter-spacing: -0.01em;
+  }
+
+  .badge-label {
+    font-size: 0.6875rem;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* ── Section titles ── */
+  .section-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
+    margin-bottom: var(--spacing-lg);
+  }
+
+  /* ── Action grid ── */
+  .report-actions {
+    margin-bottom: var(--spacing-2xl);
+  }
+
+  .action-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: var(--spacing-md);
+  }
+
+  .action-card {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    text-decoration: none;
+    color: var(--color-text-primary);
+    transition: background 0.12s ease, border-color 0.12s ease;
+    position: relative;
+  }
+
+  .action-card:hover {
+    background: var(--color-surface-raised);
+    border-color: var(--color-border-subtle);
+  }
+
+  .action-card--deep {
+    border-color: var(--color-accent);
+  }
+
+  .action-card--muted {
+    opacity: 0.75;
+  }
+
+  .action-icon {
+    font-size: 1.375rem;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+
+  .action-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .action-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .action-desc {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .action-arrow {
+    width: 1rem;
+    height: 1rem;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+    transform: rotate(-45deg);
+  }
+
+  .deep-badge {
+    position: absolute;
+    top: -0.375rem;
+    right: 0.5rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: var(--color-accent);
+    color: #fff;
+    padding: 0.125rem 0.375rem;
+    border-radius: 9999px;
+  }
+
+  /* ── Checklist ── */
+  .checklist-section {
+    margin-bottom: var(--spacing-2xl);
+  }
+
+  .checklist-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--spacing-xl);
+  }
+
+  .checklist-group {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+  }
+
+  .checklist-category {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .checklist-items {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .checklist-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+  }
+
+  .check-box {
+    width: 1rem;
+    height: 1rem;
+    border: 1.5px solid var(--color-border);
+    border-radius: 3px;
+    flex-shrink: 0;
+    margin-top: 1px;
+    background: var(--color-bg);
+  }
+
+  /* ── Share bar ── */
+  .share-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding-top: var(--spacing-xl);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .share-label {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  .share-btn {
+    padding: 0.375rem 1rem;
+    border-radius: 9999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.12s ease;
+  }
+
+  .share-btn:hover {
+    background: var(--color-surface-raised);
+    border-color: var(--color-border-subtle);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .report-hero { flex-direction: column; gap: var(--spacing-lg); }
+    .report-address h1 { font-size: 1.375rem; }
+    .action-grid { grid-template-columns: 1fr; }
+    .checklist-groups { grid-template-columns: 1fr; }
+  }
+</style>
