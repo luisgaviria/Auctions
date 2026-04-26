@@ -52,7 +52,7 @@ const hasMore = auctions.length === LIMIT;
 
 <Layout
   title="Auctions"
-  description="Browse upcoming real estate auctions in Massachusetts. Dates, deposits, and auctioneer details — updated daily."
+  description="Browse upcoming property auctions across Massachusetts — Worcester, Springfield, Boston, Lynn, and more. Live dates, deposit requirements, and auctioneer details updated daily."
 >
   {/* Hidden config element — client scripts read SSR data from here via data-* attributes */}
   <div
@@ -89,6 +89,45 @@ const hasMore = auctions.length === LIMIT;
 
   <MapSplitView auctions={auctions} hasMore={hasMore} apiUrl={apiUrl} />
   <ViewToggle />
+
+  <script type="application/ld+json" is:inline>{JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "How do property auctions work in Massachusetts?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Massachusetts property auctions are typically foreclosure sales conducted by licensed auctioneers. A deposit (usually $5,000–$25,000) is required on the day of the auction, with the balance due within 30 days. Properties are sold as-is with no inspection contingency."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What deposit do I need for a Massachusetts property auction?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Deposit requirements vary by property but typically range from $5,000 to $25,000, payable by certified check or cash on auction day. The deposit amount is listed on each auction listing."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Where are upcoming property auctions in Massachusetts listed?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Auction & Company aggregates upcoming Massachusetts property auctions from licensed auctioneers including Bay State Auction, Patriot Auctions, Sullivan & Sullivan, and others — updated daily with dates, addresses, and deposit requirements."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I inspect a property before a foreclosure auction?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Generally no — Massachusetts foreclosure auction properties are sold as-is with no inspection contingency. Bidders are encouraged to do a drive-by and research the property at the Registry of Deeds before bidding."
+        }
+      }
+    ]
+  })}</script>
 </Layout>
 
 <script>
