@@ -263,6 +263,60 @@ func slugToDisplay(slug string) string {
 	return strings.Join(words, " ")
 }
 
+// CitySlugRow is one entry in the top-cities response.
+type CitySlugRow struct {
+	CountySlug   string `json:"county_slug"`
+	CitySlug     string `json:"city_slug"`
+	City         string `json:"city"`
+	AuctionCount int    `json:"auction_count"`
+}
+
+// TopCitySlugsResponse wraps the markets list.
+type TopCitySlugsResponse struct {
+	Markets []CitySlugRow `json:"markets"`
+}
+
+// GetTopCitySlugs returns the N most active city+county slug pairs that have
+// at least one active auction.  Used by the frontend getStaticPaths call to
+// pre-render the top city landing pages at build time.
+func (s *AuctionsService) GetTopCitySlugs(limit int) ([]byte, int, error) {
+	const q = `
+		SELECT county_slug, city_slug, MAX(city) AS city, COUNT(*) AS auction_count
+		FROM auctions
+		WHERE county_slug IS NOT NULL
+		  AND city_slug   IS NOT NULL
+		  AND ` + activeFilter + `
+		GROUP BY county_slug, city_slug
+		ORDER BY auction_count DESC
+		LIMIT $1`
+
+	rows, err := s.DB.Query(q, limit)
+	if err != nil {
+		log.Printf("[slugs] query error: %v", err)
+		return nil, http.StatusInternalServerError, err
+	}
+	defer rows.Close()
+
+	markets := make([]CitySlugRow, 0, limit)
+	for rows.Next() {
+		var r CitySlugRow
+		if err := rows.Scan(&r.CountySlug, &r.CitySlug, &r.City, &r.AuctionCount); err != nil {
+			log.Printf("[slugs] scan error: %v", err)
+			return nil, http.StatusInternalServerError, err
+		}
+		markets = append(markets, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	data, err := json.Marshal(TopCitySlugsResponse{Markets: markets})
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	return data, http.StatusOK, nil
+}
+
 // GetAuctionsInBounds returns auctions whose coordinates fall within the given
 // bounding box (south ≤ lat ≤ north, west ≤ lng ≤ east).
 // Results are not cached because the bbox space is unbounded.

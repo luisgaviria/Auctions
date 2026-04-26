@@ -68,6 +68,27 @@ func (c *AuctionsController) GetAuctions(w http.ResponseWriter, req *http.Reques
 	w.Write(data)
 }
 
+// GetTopSlugs handles GET /auctions/slugs[?limit=N].
+// Returns the top N (default 50) most active city+county slug pairs.
+// Used by the Astro frontend's getStaticParams to pre-render city pages.
+func (c *AuctionsController) GetTopSlugs(w http.ResponseWriter, req *http.Request) {
+	limit := 50
+	if l := req.URL.Query().Get("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 500 {
+			limit = v
+		}
+	}
+	service := services.NewAuctionsService(c.DB)
+	data, status, err := service.GetTopCitySlugs(limit)
+	if err != nil {
+		http.Error(w, err.Error(), status)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write(data)
+}
+
 // GetAuctionsBySlug handles GET /auctions/{county_slug}/{city_slug}.
 // Returns active auctions for the given city together with a summary badge
 // (count + average deposit).  404 when the slug pair has no active auctions.

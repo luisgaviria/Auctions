@@ -91,6 +91,7 @@ func main() {
 	// Auctions routes
 	auctionsSubrouter := router.PathPrefix("/auctions").Subrouter()
 	auctionsSubrouter.HandleFunc("", auctionController.GetAuctions).Methods("GET", "OPTIONS")
+	auctionsSubrouter.HandleFunc("/slugs", auctionController.GetTopSlugs).Methods("GET", "OPTIONS")
 	auctionsSubrouter.HandleFunc("/{county_slug}/{city_slug}", auctionController.GetAuctionsBySlug).Methods("GET", "OPTIONS")
 
 	// Favorites routes

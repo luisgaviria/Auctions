@@ -1,0 +1,193 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import Card from '../../../components/Card.astro';
+import Breadcrumb from '../../../components/Breadcrumb.astro';
+
+// Pre-render the top 50 most active cities at build time.
+// Any slug pair not in this list falls through to SSR on first request,
+// then gets cached by Vercel's CDN for subsequent visitors.
+export const prerender = false; // keep as SSR so new cities are instant
+
+const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+const { county_slug, city_slug } = Astro.params;
+
+// ── Fetch market data ──────────────────────────────────────────────────────
+let market: {
+  summary: {
+    city: string;
+    county: string;
+    auction_count: number;
+    average_deposit: string;
+  };
+  auctions: any[];
+} | null = null;
+
+try {
+  const res = await fetch(`${apiUrl}/auctions/${county_slug}/${city_slug}`);
+  if (res.status === 404) {
+    return Astro.redirect('/404', 302);
+  }
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  market = await res.json();
+} catch (e) {
+  // Network / unexpected error — show a graceful error rather than crashing.
+  return new Response(null, { status: 502, statusText: 'Bad Gateway' });
+}
+
+const { summary, auctions } = market!;
+
+// ── Derived display values ─────────────────────────────────────────────────
+// City stored in DB is UPPERCASE ("WORCESTER") — title-case for display.
+function titleCase(s: string) {
+  return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+const cityDisplay   = titleCase(summary.city);
+const countyDisplay = summary.county; // already formatted by backend
+const pageTitle     = `${summary.auction_count} Upcoming Property Auction${summary.auction_count === 1 ? '' : 's'} in ${cityDisplay}, MA`;
+const description   = `Browse ${summary.auction_count} upcoming real estate auction${summary.auction_count === 1 ? '' : 's'} in ${cityDisplay}, Massachusetts${summary.average_deposit ? ` with an average deposit of ${summary.average_deposit}` : ''}. Live dates, deposits, and auctioneer details — updated daily.`;
+
+// ── Breadcrumb crumbs ──────────────────────────────────────────────────────
+const crumbs = [
+  { label: 'Home',         href: '/' },
+  { label: 'Massachusetts', href: '/massachusetts' },
+  { label: countyDisplay,  href: `/massachusetts/${county_slug}` },
+  { label: cityDisplay }, // current page — no href
+];
+---
+
+<Layout title={pageTitle} description={description}>
+  <div class="city-page">
+    <div class="container">
+
+      <Breadcrumb crumbs={crumbs} />
+
+      <!-- Hero ---------------------------------------------------------------->
+      <header class="city-hero">
+        <h1>{pageTitle}</h1>
+
+        <div class="summary-badges">
+          <div class="badge">
+            <span class="badge-value">{summary.auction_count}</span>
+            <span class="badge-label">Active Auctions</span>
+          </div>
+          {summary.average_deposit && (
+            <div class="badge">
+              <span class="badge-value">{summary.average_deposit}</span>
+              <span class="badge-label">Avg. Deposit</span>
+            </div>
+          )}
+          <div class="badge">
+            <span class="badge-value">{countyDisplay}</span>
+            <span class="badge-label">County</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Auction grid -------------------------------------------------------->
+      {auctions.length === 0 ? (
+        <div class="empty-state">
+          <p>No active auctions in {cityDisplay} right now. <a href="/">Browse all auctions</a>.</p>
+        </div>
+      ) : (
+        <div class="card-grid">
+          {auctions.map((a: any) => (
+            <Card
+              id={a.id}
+              link={a.link}
+              date={a.date}
+              time={a.time}
+              address={a.address}
+              city={a.city}
+              state={a.state}
+              status={a.status}
+              deposit={a.deposit}
+              siteName={a.site_name}
+              logo={a.logo}
+              zillowUrl={a.zillow_url}
+              streetViewUrl={a.street_view_url}
+              registryUrl={a.registry_url}
+            />
+          ))}
+        </div>
+      )}
+
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .city-page {
+    padding-top: var(--spacing-2xl);
+    padding-bottom: var(--spacing-2xl);
+  }
+
+  .city-hero {
+    margin-bottom: var(--spacing-2xl);
+  }
+
+  .city-hero h1 {
+    font-size: 2rem;
+    margin-bottom: var(--spacing-lg);
+    letter-spacing: -0.03em;
+  }
+
+  .summary-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+  }
+
+  .badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md) var(--spacing-xl);
+    min-width: 120px;
+  }
+
+  .badge-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-accent);
+    letter-spacing: -0.02em;
+  }
+
+  .badge-label {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-lg);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: var(--spacing-2xl);
+    color: var(--color-text-secondary);
+  }
+
+  .empty-state a {
+    color: var(--color-accent);
+    text-decoration: underline;
+  }
+
+  @media (max-width: 1024px) {
+    .card-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 640px) {
+    .city-hero h1 { font-size: 1.5rem; }
+    .card-grid { grid-template-columns: 1fr; gap: var(--spacing-md); }
+    .badge { min-width: 90px; padding: var(--spacing-sm) var(--spacing-md); }
+    .badge-value { font-size: 1.25rem; }
+  }
+</style>
