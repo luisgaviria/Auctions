@@ -140,18 +140,23 @@ type CityMarketResponse struct {
 }
 
 // activeFilter is the shared status + date predicate reused across queries.
+// NULL status is treated as active (scraper hasn't set one yet).
 const activeFilter = `
-	LOWER(status) NOT IN (
+	(status IS NULL OR LOWER(status) NOT IN (
 		'cancelled','sold','removed','canceled',
 		'sold back to mortgagee','back to mortgagee',
 		'past','3rd party purchase','postponed'
-	)
+	))
 	AND (date >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York')::date OR date IS NULL)`
 
 // GetAuctionsBySlug returns all active auctions for a specific city+county slug
 // pair together with a summary object (count, average deposit, display names).
 // Returns 404 when the slug combination has no active auctions.
 func (s *AuctionsService) GetAuctionsBySlug(countySlug, citySlug string) ([]byte, int, error) {
+	// Normalise slugs to lowercase so URL casing never causes a miss.
+	countySlug = strings.ToLower(strings.TrimSpace(countySlug))
+	citySlug = strings.ToLower(strings.TrimSpace(citySlug))
+
 	// ── 1. Summary aggregate ────────────────────────────────────────────────
 	const summaryQ = `
 		SELECT
@@ -161,9 +166,11 @@ func (s *AuctionsService) GetAuctionsBySlug(countySlug, citySlug string) ([]byte
 				NULLIF(REGEXP_REPLACE(deposit, '[^0-9]', '', 'g'), '')::numeric
 			))                                                                 AS avg_deposit
 		FROM auctions
-		WHERE county_slug = $1
-		  AND city_slug   = $2
+		WHERE LOWER(county_slug) = $1
+		  AND LOWER(city_slug)   = $2
 		  AND ` + activeFilter
+
+	log.Printf("[slug] summary query county=%q city=%q", countySlug, citySlug)
 
 	var cityName string
 	var count int
@@ -171,11 +178,22 @@ func (s *AuctionsService) GetAuctionsBySlug(countySlug, citySlug string) ([]byte
 
 	if err := s.DB.QueryRow(summaryQ, countySlug, citySlug).
 		Scan(&cityName, &count, &avgDeposit); err != nil {
-		log.Printf("[slug] summary query error county=%s city=%s: %v", countySlug, citySlug, err)
+		log.Printf("[slug] summary scan error county=%q city=%q: %v", countySlug, citySlug, err)
 		return nil, http.StatusInternalServerError, err
 	}
 
+	log.Printf("[slug] summary result county=%q city=%q count=%d avg_deposit=%v city_name=%q",
+		countySlug, citySlug, count, avgDeposit, cityName)
+
 	if count == 0 {
+		// Run a diagnostic query to distinguish "slugs don't exist" from
+		// "slugs exist but all auctions are filtered out by status/date".
+		var total int
+		_ = s.DB.QueryRow(
+			`SELECT COUNT(*) FROM auctions WHERE LOWER(county_slug)=$1 AND LOWER(city_slug)=$2`,
+			countySlug, citySlug,
+		).Scan(&total)
+		log.Printf("[slug] 404 — total rows (unfiltered) for %q/%q: %d", countySlug, citySlug, total)
 		return nil, http.StatusNotFound, fmt.Errorf("no active auctions found for %s/%s", countySlug, citySlug)
 	}
 
@@ -199,11 +217,12 @@ func (s *AuctionsService) GetAuctionsBySlug(countySlug, citySlug string) ([]byte
 	const rowsQ = `
 		SELECT ` + auctionCols + `
 		FROM auctions
-		WHERE county_slug = $1
-		  AND city_slug   = $2
+		WHERE LOWER(county_slug) = $1
+		  AND LOWER(city_slug)   = $2
 		  AND ` + activeFilter + `
 		ORDER BY date ASC NULLS LAST, time ASC NULLS LAST`
 
+	log.Printf("[slug] rows query county=%q city=%q", countySlug, citySlug)
 	rows, err := s.DB.Query(rowsQ, countySlug, citySlug)
 	if err != nil {
 		log.Printf("[slug] rows query error: %v", err)
