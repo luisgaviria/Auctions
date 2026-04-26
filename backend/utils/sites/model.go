@@ -12,9 +12,11 @@ type Auction struct {
 	Logo        string
 	Url         string
 	SiteName    string // identifies the source scraper, e.g. "baystate"
-	ZillowURL   string
+	ZillowURL     string
 	StreetViewURL string
-	RegistryURL string
+	RegistryURL   string
+	CitySlug      string
+	CountySlug    string
 }
 
 func (auction *Auction) Print() {

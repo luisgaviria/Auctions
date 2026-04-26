@@ -455,6 +455,22 @@ var cityToRegistry = map[string]string{
 // the given Massachusetts city or town.  The lookup is case-insensitive.
 // If the city is not found in the map, the general masslandrecords.com portal
 // is returned as a fallback.
+// GetCounty returns the plain county name for a Massachusetts city, e.g.
+// "Worcester" or "Middlesex".  Registry district suffixes ("NORTH", "SOUTH",
+// "FALL RIVER") are stripped so all towns in the same county share one name.
+// Returns "" when the city is not in the map.
+func GetCounty(city string) string {
+	key := strings.ToUpper(strings.TrimSpace(city))
+	registry, ok := cityToRegistry[key]
+	if !ok {
+		return ""
+	}
+	// Registry keys: "WORCESTER NORTH", "MIDDLESEX SOUTH", "BRISTOL FALL RIVER"
+	// → first word is always the county name.
+	first := strings.Fields(registry)[0]
+	return strings.ToUpper(first[:1]) + strings.ToLower(first[1:])
+}
+
 func GetRegistryURL(city string) string {
 	key := strings.ToUpper(strings.TrimSpace(city))
 	if registry, ok := cityToRegistry[key]; ok {

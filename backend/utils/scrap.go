@@ -26,9 +26,9 @@ import (
 var upsertAuctionSQL = `
 	INSERT INTO auctions
 		(address, city, state, time, logo, site_name, status, link, date, deposit, lat, lng,
-		 zillow_url, street_view_url, registry_url, last_seen)
+		 zillow_url, street_view_url, registry_url, last_seen, city_slug, county_slug)
 	VALUES
-		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), $16, $17)
 	ON CONFLICT ON CONSTRAINT uq_auctions_address_site DO UPDATE
 		SET
 			status          = CASE WHEN auctions.status  IS DISTINCT FROM EXCLUDED.status
@@ -41,6 +41,8 @@ var upsertAuctionSQL = `
 			zillow_url      = EXCLUDED.zillow_url,
 			street_view_url = EXCLUDED.street_view_url,
 			registry_url    = EXCLUDED.registry_url,
+			city_slug       = EXCLUDED.city_slug,
+			county_slug     = EXCLUDED.county_slug,
 			last_seen       = EXCLUDED.last_seen,
 			updated_at      = NOW()
 	RETURNING id;`
@@ -108,6 +110,31 @@ func CleanStreetAddress(s string) string {
 // catch when the address is used only for URL generation (not stored in the DB).
 // Handles edge cases like trailing state abbreviations in parentheses.
 var urlJunkRe = regexp.MustCompile(`(?i)\([^)]*\)|\bMA\s*,?\s*MA\b`)
+
+// GenerateSlug converts a display string into a URL-safe slug.
+//
+//	"Jamaica Plain"   → "jamaica-plain"
+//	"Worcester County" → "worcester-county"
+//	"  North Adams  " → "north-adams"
+func GenerateSlug(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	var b strings.Builder
+	prevHyphen := false
+	for _, r := range s {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			prevHyphen = false
+		case r == ' ' || r == '-' || r == '_':
+			if !prevHyphen {
+				b.WriteRune('-')
+				prevHyphen = true
+			}
+		}
+		// all other characters (apostrophes, commas, etc.) are dropped
+	}
+	return strings.Trim(b.String(), "-")
+}
 
 // maTokenRe matches a comma-segment that is exactly the MA state abbreviation,
 // optionally followed by a zip code.  It deliberately does NOT match
@@ -331,6 +358,11 @@ func NormalizeAuction(a sites.Auction) sites.Auction {
 	a.Status = normalizeStatus(a.Status)
 	a.Time = normalizeTime(a.Time)
 	a.ZillowURL, a.StreetViewURL, a.RegistryURL = buildAuctionURLs(a.Street, a.City)
+	a.CitySlug = GenerateSlug(a.City)
+	county := GetCounty(a.City)
+	if county != "" {
+		a.CountySlug = GenerateSlug(county + " County")
+	}
 	return a
 }
 
@@ -486,6 +518,8 @@ func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 		a.ZillowURL,     // $13 zillow_url
 		a.StreetViewURL, // $14 street_view_url
 		a.RegistryURL,   // $15 registry_url
+		a.CitySlug,      // $16 city_slug
+		a.CountySlug,    // $17 county_slug
 	).Scan(&id)
 	if err != nil {
 		log.Printf("[upsert] error for %q (%s): %v", a.Street, a.SiteName, err)
@@ -632,6 +666,59 @@ func backfillMissingURLs(ctx context.Context, db *sql.DB) {
 	log.Printf("[backfill] populated URLs for %d/%d auctions", fixed, len(toFix))
 }
 
+// backfillSlugs fixes existing rows that have no city_slug / county_slug yet.
+// For rows where city is still "Massachusetts" it also re-parses the real city
+// from the address using CleanAuctionData before generating slugs.
+// Runs at scrape startup alongside backfillMissingURLs.
+func backfillSlugs(ctx context.Context, db *sql.DB) {
+	const sel = `
+		SELECT id, address, city FROM auctions
+		WHERE city_slug IS NULL OR county_slug IS NULL`
+	rows, err := db.QueryContext(ctx, sel)
+	if err != nil {
+		log.Printf("[backfill-slugs] query error: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type row struct {
+		id      int
+		address string
+		city    string
+	}
+	var toFix []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.address, &r.city); err == nil {
+			toFix = append(toFix, r)
+		}
+	}
+	rows.Close()
+
+	fixed := 0
+	for _, r := range toFix {
+		// Re-derive city from address when the scraper left a generic placeholder.
+		_, city := CleanAuctionData(r.address, r.city)
+
+		citySlug := GenerateSlug(city)
+		county := GetCounty(city)
+		countySlug := ""
+		if county != "" {
+			countySlug = GenerateSlug(county + " County")
+		}
+
+		_, err := db.ExecContext(ctx,
+			`UPDATE auctions SET city=$1, city_slug=$2, county_slug=$3 WHERE id=$4`,
+			city, citySlug, countySlug, r.id)
+		if err != nil {
+			log.Printf("[backfill-slugs] update id=%d: %v", r.id, err)
+		} else {
+			fixed++
+		}
+	}
+	log.Printf("[backfill-slugs] populated slugs for %d/%d auctions", fixed, len(toFix))
+}
+
 // scraperDef pairs a canonical site name with a context-aware scraper function.
 // fallbackURL is non-empty for CF-based scrapers; it is used to re-fetch HTML
 // for the AI self-healing fallback when the scraper returns 0 results.
@@ -739,6 +826,7 @@ func DryRunCFScrapers(ctx context.Context, db *sql.DB) {
 	migrateNonISODates(ctx, db)
 	purgePastAuctions(ctx, db)
 	backfillMissingURLs(ctx, db)
+	backfillSlugs(ctx, db)
 
 	targets := []scraperDef{
 		{"baystate", sites.ScrapBaystate, "https://www.baystateauction.com/auctions/"},
@@ -791,6 +879,8 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 	purgePastAuctions(ctx, db)
 	// 3. Populate URL columns for any rows that predate the URL feature.
 	backfillMissingURLs(ctx, db)
+	// 4. Populate slug columns and fix any "Massachusetts" city placeholders.
+	backfillSlugs(ctx, db)
 
 	scrapers := []scraperDef{
 		// Cloudflare-migrated scrapers (context-aware, no local Chrome)
