@@ -108,6 +108,21 @@ func (c *AuctionsController) GetAuctionsBySlug(w http.ResponseWriter, req *http.
 	w.Write(data)
 }
 
+// GetReport handles GET /report/{address_slug}.
+// Returns the shareable property report (auction details + due-diligence checklist).
+func (c *AuctionsController) GetReport(w http.ResponseWriter, req *http.Request) {
+	addressSlug := mux.Vars(req)["address_slug"]
+	service := services.NewAuctionsService(c.DB)
+	data, status, err := service.GetAuctionReport(addressSlug)
+	if err != nil {
+		http.Error(w, err.Error(), status)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write(data)
+}
+
 // InvalidateCache clears all paginated auction cache entries.
 func (c *AuctionsController) InvalidateCache() {
 	cache.Cache.Flush()

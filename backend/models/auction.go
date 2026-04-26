@@ -50,6 +50,20 @@ type AuctionJSON struct {
 	RegistryURL   string `json:"registry_url"`
 }
 
+// DueDiligenceItem is one task in the shareable property report checklist.
+type DueDiligenceItem struct {
+	Task     string `json:"task"`
+	Category string `json:"category"`
+}
+
+// AuctionReport is the full response for GET /report/{address_slug}.
+type AuctionReport struct {
+	Auction     AuctionJSON        `json:"auction"`
+	Checklist   []DueDiligenceItem `json:"checklist"`
+	ShareURL    string             `json:"share_url"`
+	AddressSlug string             `json:"address_slug"`
+}
+
 // ToJSON converts a scanned AuctionModel into an API-safe AuctionJSON.
 func (a AuctionModel) ToJSON() AuctionJSON {
 	date := ""

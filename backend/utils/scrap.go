@@ -26,9 +26,9 @@ import (
 var upsertAuctionSQL = `
 	INSERT INTO auctions
 		(address, city, state, time, logo, site_name, status, link, date, deposit, lat, lng,
-		 zillow_url, street_view_url, registry_url, last_seen, city_slug, county_slug)
+		 zillow_url, street_view_url, registry_url, last_seen, city_slug, county_slug, address_slug)
 	VALUES
-		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), $16, $17)
+		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), $16, $17, $18)
 	ON CONFLICT ON CONSTRAINT uq_auctions_address_site DO UPDATE
 		SET
 			status          = CASE WHEN auctions.status  IS DISTINCT FROM EXCLUDED.status
@@ -43,6 +43,7 @@ var upsertAuctionSQL = `
 			registry_url    = EXCLUDED.registry_url,
 			city_slug       = EXCLUDED.city_slug,
 			county_slug     = EXCLUDED.county_slug,
+			address_slug    = EXCLUDED.address_slug,
 			last_seen       = EXCLUDED.last_seen,
 			updated_at      = NOW()
 	RETURNING id;`
@@ -340,6 +341,11 @@ func buildAuctionURLs(street, city string) (zillowURL, streetViewURL, registryUR
 	return
 }
 
+// BuildAuctionURLsPublic is the exported wrapper around buildAuctionURLs.
+func BuildAuctionURLsPublic(street, city string) (zillowURL, streetViewURL, registryURL string) {
+	return buildAuctionURLs(street, city)
+}
+
 // NormalizeAuction applies every address-cleaning and normalization step in
 // one place so the result is identical whether called from ScrapAllSites,
 // DryRunCFScrapers, or any future caller.  The returned copy is safe to pass
@@ -363,6 +369,9 @@ func NormalizeAuction(a sites.Auction) sites.Auction {
 	if county != "" {
 		a.CountySlug = GenerateSlug(county + " County")
 	}
+	// Address slug combines street + city for human-readable shareable URLs:
+	// "123 MAIN STREET" + "Worcester" → "123-main-street-worcester"
+	a.AddressSlug = GenerateSlug(a.Street + " " + a.City)
 	return a
 }
 
@@ -520,6 +529,7 @@ func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 		a.RegistryURL,   // $15 registry_url
 		a.CitySlug,      // $16 city_slug
 		a.CountySlug,    // $17 county_slug
+		a.AddressSlug,   // $18 address_slug
 	).Scan(&id)
 	if err != nil {
 		log.Printf("[upsert] error for %q (%s): %v", a.Street, a.SiteName, err)
@@ -673,7 +683,7 @@ func backfillMissingURLs(ctx context.Context, db *sql.DB) {
 func backfillSlugs(ctx context.Context, db *sql.DB) {
 	const sel = `
 		SELECT id, address, city FROM auctions
-		WHERE city_slug IS NULL OR county_slug IS NULL`
+		WHERE city_slug IS NULL OR county_slug IS NULL OR address_slug IS NULL`
 	rows, err := db.QueryContext(ctx, sel)
 	if err != nil {
 		log.Printf("[backfill-slugs] query error: %v", err)
@@ -707,9 +717,11 @@ func backfillSlugs(ctx context.Context, db *sql.DB) {
 			countySlug = GenerateSlug(county + " County")
 		}
 
+		addressSlug := GenerateSlug(r.address + " " + city)
+
 		_, err := db.ExecContext(ctx,
-			`UPDATE auctions SET city=$1, city_slug=$2, county_slug=$3 WHERE id=$4`,
-			city, citySlug, countySlug, r.id)
+			`UPDATE auctions SET city=$1, city_slug=$2, county_slug=$3, address_slug=$4 WHERE id=$5`,
+			city, citySlug, countySlug, addressSlug, r.id)
 		if err != nil {
 			log.Printf("[backfill-slugs] update id=%d: %v", r.id, err)
 		} else {

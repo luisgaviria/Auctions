@@ -17,6 +17,7 @@ type Auction struct {
 	RegistryURL   string
 	CitySlug      string
 	CountySlug    string
+	AddressSlug   string
 }
 
 func (auction *Auction) Print() {

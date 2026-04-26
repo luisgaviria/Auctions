@@ -2,6 +2,7 @@ package services
 
 import (
 	"backendAuction/models"
+	"backendAuction/utils"
 	"backendAuction/utils/cache"
 	"database/sql"
 	"encoding/json"
@@ -334,6 +335,117 @@ func (s *AuctionsService) GetTopCitySlugs(limit int) ([]byte, int, error) {
 		return nil, http.StatusInternalServerError, err
 	}
 	return data, http.StatusOK, nil
+}
+
+// GetAuctionReport fetches a single auction by address_slug and returns a full
+// property report including a due-diligence checklist.
+// When zillow_url / registry_url are empty in the DB (pre-backfill rows) the
+// function regenerates them on the fly so the report is always complete.
+func (s *AuctionsService) GetAuctionReport(addressSlug string) ([]byte, int, error) {
+	addressSlug = strings.ToLower(strings.TrimSpace(addressSlug))
+
+	// Fetch the auction row.  address_slug is not unique (two auctioneers can
+	// list the same property) so we take the first active result.
+	const q = `
+		SELECT ` + auctionCols + `, COALESCE(address_slug, '') AS address_slug
+		FROM auctions
+		WHERE address_slug = $1
+		  AND ` + activeFilter + `
+		ORDER BY date ASC NULLS LAST
+		LIMIT 1`
+
+	log.Printf("[report] query address_slug=%q", addressSlug)
+
+	var a models.AuctionModel
+	var scannedSlug string
+	err := s.DB.QueryRow(q, addressSlug).Scan(
+		&a.Id, &a.Address, &a.City, &a.State, &a.Time, &a.Logo,
+		&a.Status, &a.Link, &a.Date, &a.Deposit, &a.Lat, &a.Lng,
+		&a.Createdat, &a.SiteName, &a.UpdatedAt, &a.LastSeen,
+		&a.ZillowURL, &a.StreetViewURL, &a.RegistryURL,
+		&scannedSlug,
+	)
+	if err == sql.ErrNoRows {
+		log.Printf("[report] 404 address_slug=%q", addressSlug)
+		return nil, http.StatusNotFound, fmt.Errorf("no report found for %q", addressSlug)
+	}
+	if err != nil {
+		log.Printf("[report] scan error: %v", err)
+		return nil, http.StatusInternalServerError, err
+	}
+
+	auctionJSON := a.ToJSON()
+
+	// If URL columns are empty (row predates the backfill), generate on the fly.
+	if auctionJSON.ZillowURL == "" || auctionJSON.RegistryURL == "" {
+		z, sv, reg := utils.BuildAuctionURLsPublic(auctionJSON.Address, auctionJSON.City)
+		if auctionJSON.ZillowURL == "" {
+			auctionJSON.ZillowURL = z
+		}
+		if auctionJSON.StreetViewURL == "" {
+			auctionJSON.StreetViewURL = sv
+		}
+		if auctionJSON.RegistryURL == "" {
+			auctionJSON.RegistryURL = reg
+		}
+	}
+
+	checklist := buildChecklist(auctionJSON)
+	shareURL := "https://auctionandcompany.com/report/" + addressSlug
+
+	report := models.AuctionReport{
+		Auction:     auctionJSON,
+		Checklist:   checklist,
+		ShareURL:    shareURL,
+		AddressSlug: scannedSlug,
+	}
+
+	data, err := json.Marshal(report)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	return data, http.StatusOK, nil
+}
+
+// buildChecklist returns a personalised due-diligence checklist for a property.
+// Items are ordered by the typical workflow an investor follows before bidding.
+func buildChecklist(a models.AuctionJSON) []models.DueDiligenceItem {
+	items := []models.DueDiligenceItem{
+		{Task: "Drive-by inspection of the property", Category: "Physical"},
+		{Task: "Confirm occupancy status (owner-occupied vs. tenant vs. vacant)", Category: "Physical"},
+		{Task: "Photograph exterior condition and visible damage", Category: "Physical"},
+	}
+
+	// Financial items — personalise with deposit amount when available.
+	depositLine := "Prepare certified check for deposit"
+	if a.Deposit != "" {
+		depositLine = "Prepare certified check for deposit (" + a.Deposit + ")"
+	}
+	items = append(items,
+		models.DueDiligenceItem{Task: depositLine, Category: "Financial"},
+		models.DueDiligenceItem{Task: "Research assessed value and recent comparable sales", Category: "Financial"},
+		models.DueDiligenceItem{Task: "Estimate rehab costs for a realistic ARV calculation", Category: "Financial"},
+		models.DueDiligenceItem{Task: "Calculate maximum bid (ARV × 70% − repairs − deposit)", Category: "Financial"},
+	)
+
+	// Legal items — link to registry when available.
+	registryLine := "Verify all existing liens at the Registry of Deeds"
+	if a.RegistryURL != "" {
+		registryLine += " (" + a.RegistryURL + ")"
+	}
+	items = append(items,
+		models.DueDiligenceItem{Task: registryLine, Category: "Legal"},
+		models.DueDiligenceItem{Task: "Research outstanding real estate taxes and municipal charges", Category: "Legal"},
+		models.DueDiligenceItem{Task: "Review title history for IRS liens or judgment liens", Category: "Legal"},
+		models.DueDiligenceItem{Task: "Obtain and read the full terms of sale from the auctioneer", Category: "Legal"},
+	)
+
+	items = append(items,
+		models.DueDiligenceItem{Task: "Confirm auction date, time, and location with auctioneer", Category: "Administrative"},
+		models.DueDiligenceItem{Task: "Register or pre-qualify with the auctioneer if required", Category: "Administrative"},
+	)
+
+	return items
 }
 
 // GetAuctionsInBounds returns auctions whose coordinates fall within the given
