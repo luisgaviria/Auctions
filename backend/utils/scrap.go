@@ -46,9 +46,9 @@ var upsertAuctionSQL = `
 			city_slug         = EXCLUDED.city_slug,
 			county_slug       = EXCLUDED.county_slug,
 			address_slug      = EXCLUDED.address_slug,
-			legal_description = EXCLUDED.legal_description,
+			legal_description  = COALESCE(EXCLUDED.legal_description,  auctions.legal_description),
 			registry_deep_link = COALESCE(EXCLUDED.registry_deep_link, auctions.registry_deep_link),
-			assessor_pid      = COALESCE(EXCLUDED.assessor_pid,       auctions.assessor_pid),
+			assessor_pid       = COALESCE(EXCLUDED.assessor_pid,        auctions.assessor_pid),
 			last_seen         = EXCLUDED.last_seen,
 			updated_at        = NOW()
 	RETURNING id;`
@@ -487,6 +487,16 @@ func isElapsedToday(dateStr, timeStr string) bool {
 
 // upsertAuction writes a single already-normalised auction to the DB.
 // Callers must run NormalizeAuction before calling this function.
+// nullIfEmpty converts an empty string to a nil interface so lib/pq writes SQL
+// NULL instead of an empty string.  This lets COALESCE in the upsert preserve
+// a previously-stored non-empty value when the current scrape didn't capture one.
+func nullIfEmpty(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 	// Skip auctions whose date has already passed (strictly before today in ET).
 	// Same-day auctions whose time has elapsed are kept: we still upsert them
@@ -536,15 +546,15 @@ func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 		a.Deposit,       // $10 deposit
 		"0",             // $11 lat
 		"0",             // $12 lng
-		a.ZillowURL,         // $13 zillow_url
-		a.StreetViewURL,     // $14 street_view_url
-		a.RegistryURL,       // $15 registry_url
-		a.CitySlug,          // $16 city_slug
-		a.CountySlug,        // $17 county_slug
-		a.AddressSlug,       // $18 address_slug
-		a.LegalDescription,  // $19 legal_description
-		a.RegistryDeepLink,  // $20 registry_deep_link
-		nil,                 // $21 assessor_pid (set by second-pass)
+		a.ZillowURL,           // $13 zillow_url
+		a.StreetViewURL,       // $14 street_view_url
+		a.RegistryURL,         // $15 registry_url
+		a.CitySlug,            // $16 city_slug
+		a.CountySlug,          // $17 county_slug
+		a.AddressSlug,         // $18 address_slug
+		nullIfEmpty(a.LegalDescription),  // $19 legal_description
+		nullIfEmpty(a.RegistryDeepLink),  // $20 registry_deep_link
+		nil,                              // $21 assessor_pid (set by second-pass)
 	).Scan(&id)
 	if err != nil {
 		log.Printf("[upsert] error for %q (%s): %v", a.Street, a.SiteName, err)
@@ -746,6 +756,56 @@ func backfillSlugs(ctx context.Context, db *sql.DB) {
 	log.Printf("[backfill-slugs] populated slugs for %d/%d auctions", fixed, len(toFix))
 }
 
+// backfillRegistryDeepLinks computes registry_deep_link for any row that has a
+// legal_description but no registry_deep_link yet.  Runs at scrape startup so
+// rows scraped before this feature was deployed get their deep links populated.
+func backfillRegistryDeepLinks(ctx context.Context, db *sql.DB) {
+	const sel = `
+		SELECT id, legal_description, city FROM auctions
+		WHERE legal_description IS NOT NULL
+		  AND legal_description != ''
+		  AND (registry_deep_link IS NULL OR registry_deep_link = '')`
+
+	rows, err := db.QueryContext(ctx, sel)
+	if err != nil {
+		log.Printf("[backfill-deeplinks] query error: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type row struct {
+		id    int
+		legal string
+		city  string
+	}
+	var toFix []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.legal, &r.city); err == nil {
+			toFix = append(toFix, r)
+		}
+	}
+	rows.Close()
+
+	fixed := 0
+	for _, r := range toFix {
+		book, page := ExtractBookPage(r.legal)
+		link := BuildRegistryDeepLink(r.city, book, page)
+		if link == "" {
+			continue // book/page not found in this legal description
+		}
+		_, err := db.ExecContext(ctx,
+			`UPDATE auctions SET registry_deep_link=$1 WHERE id=$2`,
+			link, r.id)
+		if err != nil {
+			log.Printf("[backfill-deeplinks] update id=%d: %v", r.id, err)
+		} else {
+			fixed++
+		}
+	}
+	log.Printf("[backfill-deeplinks] populated deep links for %d/%d auctions", fixed, len(toFix))
+}
+
 // scraperDef pairs a canonical site name with a context-aware scraper function.
 // fallbackURL is non-empty for CF-based scrapers; it is used to re-fetch HTML
 // for the AI self-healing fallback when the scraper returns 0 results.
@@ -908,6 +968,8 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 	backfillMissingURLs(ctx, db)
 	// 4. Populate slug columns and fix any "Massachusetts" city placeholders.
 	backfillSlugs(ctx, db)
+	// 5. Compute registry deep links for rows that have a legal description but no link yet.
+	backfillRegistryDeepLinks(ctx, db)
 
 	scrapers := []scraperDef{
 		// Cloudflare-migrated scrapers (context-aware, no local Chrome)

@@ -103,8 +103,15 @@ func ScrapDean() []Auction {
 
 					case 2:
 						raw := strings.TrimSpace(td.Text)
-						// Drop the mortgage registry line — keep only the first line.
+						// The address cell contains two lines:
+						//   Line 1: street address ("90 SUFFOLK ROAD, NEWTON, MA")
+						//   Line 2: mortgage registry citation ("Book 45231, Page 112")
+						// Capture line 2 as LegalDescription before dropping it.
 						if idx := strings.IndexByte(raw, '\n'); idx != -1 {
+							legalLine := strings.TrimSpace(raw[idx+1:])
+							if legalLine != "" {
+								auction.LegalDescription = legalLine
+							}
 							raw = strings.TrimSpace(raw[:idx])
 						}
 						auction.Street = raw
