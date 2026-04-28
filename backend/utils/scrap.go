@@ -381,14 +381,13 @@ func NormalizeAuction(a sites.Auction) sites.Auction {
 	a.Time = normalizeTime(a.Time)
 	a.ZillowURL, a.StreetViewURL, a.RegistryURL = buildAuctionURLs(a.Street, a.City)
 
-	// Extract Book/Page coordinates from the legal description and store both
-	// the numeric fields (for frontend dynamic URL building) and the pre-built
-	// deep link (for backward compatibility).
+	// Extract Book/Page coordinates from the legal description and store the
+	// raw integers.  The frontend builds the full URL dynamically from the
+	// district base URL (registry_url) + these coordinates.
 	if a.LegalDescription != "" {
 		book, page := ExtractBookPage(a.LegalDescription)
 		a.RegistryBook = atoiSafe(book)
 		a.RegistryPage = atoiSafe(page)
-		a.RegistryDeepLink = BuildRegistryDeepLink(a.City, book, page)
 	}
 
 	a.CitySlug = GenerateSlug(a.City)
@@ -581,7 +580,7 @@ func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 		a.CountySlug,          // $17 county_slug
 		a.AddressSlug,         // $18 address_slug
 		nullIfEmpty(a.LegalDescription),  // $19 legal_description
-		nullIfEmpty(a.RegistryDeepLink),  // $20 registry_deep_link
+		nil,                              // $20 registry_deep_link — frontend builds dynamically; COALESCE preserves old rows
 		nil,                              // $21 assessor_pid (set by second-pass)
 		nullIfZero(a.RegistryBook),       // $22 registry_book
 		nullIfZero(a.RegistryPage),       // $23 registry_page
@@ -786,19 +785,20 @@ func backfillSlugs(ctx context.Context, db *sql.DB) {
 	log.Printf("[backfill-slugs] populated slugs for %d/%d auctions", fixed, len(toFix))
 }
 
-// backfillRegistryDeepLinks computes registry_deep_link for any row that has a
-// legal_description but no registry_deep_link yet.  Runs at scrape startup so
-// rows scraped before this feature was deployed get their deep links populated.
-func backfillRegistryDeepLinks(ctx context.Context, db *sql.DB) {
+// backfillRegistryCoordinates parses legal_description for any row that has one
+// but no registry_book/registry_page yet, and writes the integer coordinates.
+// The frontend builds the full deep-link URL on-the-fly from these integers +
+// the district registry_url, so no string URL is stored by this pass.
+func backfillRegistryCoordinates(ctx context.Context, db *sql.DB) {
 	const sel = `
-		SELECT id, legal_description, city FROM auctions
+		SELECT id, legal_description FROM auctions
 		WHERE legal_description IS NOT NULL
 		  AND legal_description != ''
 		  AND (registry_book IS NULL OR registry_page IS NULL)`
 
 	rows, err := db.QueryContext(ctx, sel)
 	if err != nil {
-		log.Printf("[backfill-deeplinks] query error: %v", err)
+		log.Printf("[backfill-coords] query error: %v", err)
 		return
 	}
 	defer rows.Close()
@@ -806,12 +806,11 @@ func backfillRegistryDeepLinks(ctx context.Context, db *sql.DB) {
 	type row struct {
 		id    int
 		legal string
-		city  string
 	}
 	var toFix []row
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.id, &r.legal, &r.city); err == nil {
+		if err := rows.Scan(&r.id, &r.legal); err == nil {
 			toFix = append(toFix, r)
 		}
 	}
@@ -823,19 +822,16 @@ func backfillRegistryDeepLinks(ctx context.Context, db *sql.DB) {
 		if book == "" || page == "" {
 			continue
 		}
-		link := BuildRegistryDeepLink(r.city, book, page)
-		bookInt := nullIfZero(atoiSafe(book))
-		pageInt := nullIfZero(atoiSafe(page))
 		_, err := db.ExecContext(ctx,
-			`UPDATE auctions SET registry_book=$1, registry_page=$2, registry_deep_link=$3 WHERE id=$4`,
-			bookInt, pageInt, link, r.id)
+			`UPDATE auctions SET registry_book=$1, registry_page=$2 WHERE id=$3`,
+			nullIfZero(atoiSafe(book)), nullIfZero(atoiSafe(page)), r.id)
 		if err != nil {
-			log.Printf("[backfill-deeplinks] update id=%d: %v", r.id, err)
+			log.Printf("[backfill-coords] update id=%d: %v", r.id, err)
 		} else {
 			fixed++
 		}
 	}
-	log.Printf("[backfill-deeplinks] populated deep links for %d/%d auctions", fixed, len(toFix))
+	log.Printf("[backfill-coords] populated coordinates for %d/%d auctions", fixed, len(toFix))
 }
 
 // scraperDef pairs a canonical site name with a context-aware scraper function.
@@ -997,7 +993,7 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 	purgePastAuctions(ctx, db)
 	backfillMissingURLs(ctx, db)
 	backfillSlugs(ctx, db)
-	// NOTE: backfillRegistryDeepLinks and RunAssessorSecondPass run in the
+	// NOTE: backfillRegistryCoordinates and RunAssessorSecondPass run in the
 	// enrichment phase AFTER all 12 scrapers have committed their data.
 
 	// Build a deposit cache for Patriot so detail page crawls are skipped for
@@ -1134,9 +1130,9 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 	enrichCtx, enrichCancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	defer enrichCancel()
 
-	// Level 2 (mortgage): compute registry deep links from scraped legal_description.
+	// Level 2 (mortgage): parse registry_book/registry_page from legal_description.
 	// Fast — pure DB read + string math, no external HTTP.
-	backfillRegistryDeepLinks(enrichCtx, db)
+	backfillRegistryCoordinates(enrichCtx, db)
 
 	// Level 1 (deed) + assessor PID: hit VGSI portals for rows still missing data.
 	RunAssessorSecondPass(enrichCtx, db)

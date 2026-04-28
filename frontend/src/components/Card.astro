@@ -14,19 +14,20 @@ interface Props {
   zillowUrl?: string;
   streetViewUrl?: string;
   registryUrl?: string;
-  registryDeepLink?: string;
   registryBook?: number;
   registryPage?: number;
   nearbyLandmarks?: string[];
 }
 
-const { id, link, date, time: auctionTime, address, city, state, status, deposit, siteName, logo, zillowUrl, streetViewUrl, registryUrl, registryDeepLink, registryBook, registryPage, nearbyLandmarks } =
+const { id, link, date, time: auctionTime, address, city, state, status, deposit, siteName, logo, zillowUrl, streetViewUrl, registryUrl, registryBook, registryPage, nearbyLandmarks } =
   Astro.props;
 
+// Build the deep-link URL dynamically from coordinates + district base URL.
+// Falls back to the district homepage when book/page are not yet available.
 const effectiveRegistryUrl =
   (registryBook && registryPage && registryUrl)
     ? `${registryUrl}/Default.aspx?p=BookSearch&b=${registryBook}&pg=${registryPage}`
-    : registryDeepLink || registryUrl;
+    : registryUrl;
 
 function toISODate(str: string): string {
   if (!str) return '';

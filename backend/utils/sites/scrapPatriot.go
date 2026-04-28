@@ -6,6 +6,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -25,6 +26,9 @@ func ScrapPatriot(ctx context.Context) ([]Auction, error) {
 // in the map, the browser-based detail crawl is skipped entirely — saving one
 // Cloudflare Browser Rendering API call per cached property.
 // Pass nil (or an empty map) to always fetch detail pages.
+//
+// Detail fetches are dispatched to a pool of 3 parallel workers so multiple
+// Cloudflare calls proceed concurrently instead of sequentially.
 func ScrapPatriotWithCache(ctx context.Context, knownDeposits map[string]string) ([]Auction, error) {
 	html, err := CFetch(ctx, patriotBase+"/auctions-in-massachusetts/")
 	if err != nil {
@@ -36,13 +40,20 @@ func ScrapPatriotWithCache(ctx context.Context, knownDeposits map[string]string)
 		return nil, fmt.Errorf("patriot: parse list: %w", err)
 	}
 
-	var auctions []Auction
+	// ── Pass 1: collect raw listing data (no detail calls yet) ──────────────
+	type listItem struct {
+		rawAddress    string
+		formattedDate string
+		formattedTime string
+		fullHref      string
+		listStatus    string
+	}
+	var items []listItem
+
 	doc.Find("#calendar > div > a").Each(func(_ int, a *goquery.Selection) {
 		rawAddress := strings.TrimSpace(a.Find("h1").Text())
 		rawDateRaw := strings.TrimSpace(a.Find(".auction-date").Text())
 
-		// Detect a "Continued" status from the list-page date string before
-		// stripping it, so we can use it when skipping the detail fetch.
 		listStatus := "On Schedule"
 		if strings.Contains(strings.ToUpper(rawDateRaw), "CONTINUED") {
 			listStatus = "Continued"
@@ -50,9 +61,6 @@ func ScrapPatriotWithCache(ctx context.Context, knownDeposits map[string]string)
 		rawDate := strings.TrimSpace(strings.Split(rawDateRaw, "Continued")[0])
 
 		href, _ := a.Attr("href")
-		// Guard: if the listing anchor has no href (e.g. scrape degraded),
-		// fall back to the Massachusetts auctions index rather than storing
-		// the bare base URL which offers no useful detail for the user.
 		var fullHref string
 		if strings.TrimSpace(href) != "" {
 			fullHref = patriotBase + href
@@ -61,22 +69,50 @@ func ScrapPatriotWithCache(ctx context.Context, knownDeposits map[string]string)
 		}
 
 		formattedDate, formattedTime := parseDateAndTimePatriot(rawDate)
+		items = append(items, listItem{rawAddress, formattedDate, formattedTime, fullHref, listStatus})
+	})
 
-		// Smart skip: if a deposit is already cached for this URL, skip the
-		// expensive browser-based detail crawl.  Status comes from the list page.
-		var deposit, status string
-		if cached, ok := knownDeposits[fullHref]; ok && cached != "" {
-			deposit = cached
-			status = listStatus
-			log.Printf("[patriot] deposit cached — skipping detail fetch url=%q", fullHref)
-		} else {
-			deposit, status = patriotDetail(ctx, fullHref)
-		}
+	// ── Pass 2: fetch detail pages via 3-worker pool ─────────────────────────
+	type detailResult struct {
+		deposit string
+		status  string
+	}
+	details := make([]detailResult, len(items))
 
+	type workUnit struct{ idx int }
+	work := make(chan workUnit, len(items))
+	for i := range items {
+		work <- workUnit{i}
+	}
+	close(work)
+
+	const numWorkers = 3
+	var wg sync.WaitGroup
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for wu := range work {
+				item := items[wu.idx]
+				if cached, ok := knownDeposits[item.fullHref]; ok && cached != "" {
+					log.Printf("[patriot] deposit cached — skipping detail fetch url=%q", item.fullHref)
+					details[wu.idx] = detailResult{cached, item.listStatus}
+				} else {
+					deposit, status := patriotDetail(ctx, item.fullHref)
+					details[wu.idx] = detailResult{deposit, status}
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	// ── Pass 3: assemble final auction slice ─────────────────────────────────
+	var auctions []Auction
+	for i, item := range items {
 		// Patriot formats addresses as "47 Foss Road - Gardner, MA".
-		street := rawAddress
+		street := item.rawAddress
 		city := ""
-		if parts := strings.SplitN(rawAddress, " - ", 2); len(parts) == 2 {
+		if parts := strings.SplitN(item.rawAddress, " - ", 2); len(parts) == 2 {
 			street = strings.TrimSpace(parts[0])
 			cityState := strings.TrimSpace(parts[1])
 			if comma := strings.Index(cityState, ","); comma != -1 {
@@ -85,19 +121,18 @@ func ScrapPatriotWithCache(ctx context.Context, knownDeposits map[string]string)
 				city = cityState
 			}
 		}
-
 		auctions = append(auctions, Auction{
 			SiteName: "patriot",
 			Logo:     patriotLogo,
 			Street:   street,
 			City:     city,
-			Url:      fullHref,
-			Date:     formattedDate,
-			Time:     formattedTime,
-			Deposit:  deposit,
-			Status:   status,
+			Url:      item.fullHref,
+			Date:     item.formattedDate,
+			Time:     item.formattedTime,
+			Deposit:  details[i].deposit,
+			Status:   details[i].status,
 		})
-	})
+	}
 
 	return auctions, nil
 }

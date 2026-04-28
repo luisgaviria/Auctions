@@ -25,7 +25,8 @@ type Report = {
     zillow_url: string;
     street_view_url: string;
     registry_url: string;
-    registry_deep_link?: string;
+    registry_book?: number;
+    registry_page?: number;
     assessor_pid?: string;
   };
   checklist: ChecklistItem[];
@@ -71,9 +72,12 @@ for (const item of checklist) {
   grouped[item.category].push(item);
 }
 
-// Registry button: prefer deep link (book/page) over portal link.
-const registryHref = auction.registry_deep_link || auction.registry_url || '#';
-const registryIsDeep = Boolean(auction.registry_deep_link);
+// Registry button: build deep link from coordinates when available.
+const registryHref =
+  (auction.registry_book && auction.registry_page && auction.registry_url)
+    ? `${auction.registry_url}/Default.aspx?p=BookSearch&b=${auction.registry_book}&pg=${auction.registry_page}`
+    : auction.registry_url || '#';
+const registryIsDeep = Boolean(auction.registry_book && auction.registry_page);
 ---
 
 <Layout title={pageTitle} description={description} canonical={`${Astro.url.origin}/report/${address_slug}`}>
