@@ -409,18 +409,24 @@ func FetchAssessorPID(ctx context.Context, street, city string) (string, error) 
 
 // ── Chain-of-title: deed link from VGSI parcel page ─────────────────────────
 
+// deedResult holds the book/page integers and the pre-built deep link URL.
+type deedResult struct {
+	book int
+	page int
+	link string
+}
+
 // fetchDeedLinkFromParcel GETs the VGSI Parcel page for the given pid and
-// returns a registry deep link built from the most recent sale's Book/Page.
-// Returns "" when the page cannot be fetched, has no sales table, or the
-// first row has no Book/Page — all non-fatal.
-func fetchDeedLinkFromParcel(ctx context.Context, baseURL, pid, city string) string {
+// returns the most recent sale's Book/Page integers and deep link URL.
+// All fields are zero/empty when the data cannot be found — non-fatal.
+func fetchDeedLinkFromParcel(ctx context.Context, baseURL, pid, city string) deedResult {
 	if pid == "" || baseURL == "" {
-		return ""
+		return deedResult{}
 	}
 	parcelURL := baseURL + "/Parcel.aspx?pid=" + url.QueryEscape(pid)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parcelURL, nil)
 	if err != nil {
-		return ""
+		return deedResult{}
 	}
 	vgsiHeaders(req, baseURL+"/Search.aspx")
 
@@ -428,18 +434,18 @@ func fetchDeedLinkFromParcel(ctx context.Context, baseURL, pid, city string) str
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("[assessor] parcel fetch pid=%s: %v", pid, err)
-		return ""
+		return deedResult{}
 	}
 	defer resp.Body.Close()
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		return ""
+		return deedResult{}
 	}
 
 	// Walk every <table> looking for one whose header row contains both
 	// "book" and "page" columns — that is the Sales / Ownership History table.
-	var deedLink string
+	var result deedResult
 	doc.Find("table").EachWithBreak(func(_ int, tbl *goquery.Selection) bool {
 		colIdx := map[string]int{}
 		tbl.Find("tr").First().Find("th, td").Each(func(i int, cell *goquery.Selection) {
@@ -460,18 +466,20 @@ func fetchDeedLinkFromParcel(ctx context.Context, baseURL, pid, city string) str
 			return false
 		}
 		cells := allRows.Eq(1).Find("td")
-		book := strings.TrimSpace(cells.Eq(bookCol).Text())
-		page := strings.TrimSpace(cells.Eq(pageCol).Text())
-		if book != "" && page != "" {
-			deedLink = BuildRegistryDeepLink(city, book, page)
+		bookStr := strings.TrimSpace(cells.Eq(bookCol).Text())
+		pageStr := strings.TrimSpace(cells.Eq(pageCol).Text())
+		if bookStr != "" && pageStr != "" {
+			result.book = atoiSafe(bookStr)
+			result.page = atoiSafe(pageStr)
+			result.link = BuildRegistryDeepLink(city, bookStr, pageStr)
 		}
 		return false // stop after first matching table
 	})
 
-	if deedLink != "" {
-		log.Printf("[assessor] deed link found pid=%s city=%q: %s", pid, city, deedLink)
+	if result.link != "" {
+		log.Printf("[assessor] deed link found pid=%s city=%q book=%d page=%d", pid, city, result.book, result.page)
 	}
-	return deedLink
+	return result
 }
 
 // ── Second-pass assessor enrichment ─────────────────────────────────────────
@@ -486,17 +494,18 @@ func fetchDeedLinkFromParcel(ctx context.Context, baseURL, pid, city string) str
 func RunAssessorSecondPass(ctx context.Context, db *sql.DB) {
 	const numWorkers = 3
 
-	// Count rows that are already fully enriched (both fields present).
+	// Count rows that are already fully enriched (all three fields present).
 	var alreadyEnriched int
 	db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM auctions
-		WHERE assessor_pid    IS NOT NULL AND assessor_pid    != ''
-		  AND registry_deep_link IS NOT NULL AND registry_deep_link != ''`).Scan(&alreadyEnriched)
+		WHERE assessor_pid IS NOT NULL AND assessor_pid != ''
+		  AND registry_book IS NOT NULL
+		  AND registry_page IS NOT NULL`).Scan(&alreadyEnriched)
 
 	// Only fetch rows that are still missing at least one enrichment field.
 	const sel = `
 		SELECT id, address, city FROM auctions
-		WHERE (assessor_pid IS NULL OR registry_deep_link IS NULL)
+		WHERE (assessor_pid IS NULL OR registry_book IS NULL OR registry_page IS NULL)
 		  AND city IS NOT NULL AND city != ''`
 
 	rows, err := db.QueryContext(ctx, sel)
@@ -564,14 +573,14 @@ func RunAssessorSecondPass(ctx context.Context, db *sql.DB) {
 				}
 
 				// Level 1: deed Book/Page from the Sales History table.
-				deedLink := fetchDeedLinkFromParcel(ctx, GetVGSIBaseURL(c.city), pid, c.city)
+				deed := fetchDeedLinkFromParcel(ctx, GetVGSIBaseURL(c.city), pid, c.city)
 
 				// Commit immediately — partial progress is never lost.
 				var upErr error
-				if deedLink != "" {
+				if deed.link != "" {
 					_, upErr = db.ExecContext(ctx,
-						`UPDATE auctions SET assessor_pid=$1, registry_deep_link=$2 WHERE id=$3`,
-						pid, deedLink, c.id)
+						`UPDATE auctions SET assessor_pid=$1, registry_book=$2, registry_page=$3, registry_deep_link=$4 WHERE id=$5`,
+						pid, nullIfZero(deed.book), nullIfZero(deed.page), deed.link, c.id)
 				} else {
 					_, upErr = db.ExecContext(ctx,
 						`UPDATE auctions SET assessor_pid=$1 WHERE id=$2`,
@@ -580,7 +589,7 @@ func RunAssessorSecondPass(ctx context.Context, db *sql.DB) {
 				if upErr != nil {
 					log.Printf("[Enrichment] db update id=%d: %v", c.id, upErr)
 				} else {
-					log.Printf("[Enrichment] id=%d pid=%s deed=%q addr=%q", c.id, pid, deedLink, c.address)
+					log.Printf("[Enrichment] id=%d pid=%s deed=%q addr=%q", c.id, pid, deed.link, c.address)
 					mu.Lock()
 					enriched++
 					mu.Unlock()

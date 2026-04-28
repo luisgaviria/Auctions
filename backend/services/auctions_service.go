@@ -31,7 +31,8 @@ type GetAuctionsResponse struct {
 // never breaks the scan regardless of migration order across environments.
 const auctionCols = `id, address, city, state, time, logo, status, link,
 	date, deposit, lat, lng, "createdAt", site_name, updated_at, last_seen,
-	zillow_url, street_view_url, registry_url, assessor_pid, registry_deep_link`
+	zillow_url, street_view_url, registry_url, assessor_pid, registry_deep_link,
+	registry_book, registry_page`
 
 // selectFilteredAuctions excludes terminal/past statuses, drops past-dated rows,
 // and sorts upcoming auctions chronologically.
@@ -103,6 +104,8 @@ func (s *AuctionsService) GetAuctions(limit, offset int) ([]byte, int, error) {
 			&auction.RegistryURL,
 			&auction.AssessorPID,
 			&auction.RegistryDeepLink,
+			&auction.RegistryBook,
+			&auction.RegistryPage,
 		); err != nil {
 			log.Printf("Error scanning auction: %v\n", err)
 			return nil, http.StatusInternalServerError, err
@@ -242,6 +245,7 @@ func (s *AuctionsService) GetAuctionsBySlug(countySlug, citySlug string) ([]byte
 			&a.Createdat, &a.SiteName, &a.UpdatedAt, &a.LastSeen,
 			&a.ZillowURL, &a.StreetViewURL, &a.RegistryURL,
 			&a.AssessorPID, &a.RegistryDeepLink,
+			&a.RegistryBook, &a.RegistryPage,
 		); err != nil {
 			log.Printf("[slug] scan error: %v", err)
 			return nil, http.StatusInternalServerError, err
@@ -367,6 +371,7 @@ func (s *AuctionsService) GetAuctionReport(addressSlug string) ([]byte, int, err
 		&a.Createdat, &a.SiteName, &a.UpdatedAt, &a.LastSeen,
 		&a.ZillowURL, &a.StreetViewURL, &a.RegistryURL,
 		&a.AssessorPID, &a.RegistryDeepLink,
+		&a.RegistryBook, &a.RegistryPage,
 		&scannedSlug,
 	)
 	if err == sql.ErrNoRows {
@@ -491,6 +496,8 @@ func (s *AuctionsService) GetAuctionsInBounds(south, north, west, east float64) 
 			&auction.RegistryURL,
 			&auction.AssessorPID,
 			&auction.RegistryDeepLink,
+			&auction.RegistryBook,
+			&auction.RegistryPage,
 		); err != nil {
 			log.Printf("Error scanning auction (bbox): %v\n", err)
 			return nil, http.StatusInternalServerError, err

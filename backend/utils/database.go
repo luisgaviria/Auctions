@@ -70,6 +70,10 @@ ALTER TABLE auctions ADD COLUMN IF NOT EXISTS legal_description  TEXT;
 ALTER TABLE auctions ADD COLUMN IF NOT EXISTS registry_deep_link TEXT;
 ALTER TABLE auctions ADD COLUMN IF NOT EXISTS assessor_pid       TEXT;`
 
+var addRegistryCoordinates = `
+ALTER TABLE auctions ADD COLUMN IF NOT EXISTS registry_book INTEGER;
+ALTER TABLE auctions ADD COLUMN IF NOT EXISTS registry_page INTEGER;`
+
 func InitTables(db *sql.DB) {
 	pingErr := db.Ping()
 	if pingErr != nil {
@@ -109,6 +113,12 @@ func InitTables(db *sql.DB) {
 	if err != nil {
 		log.Fatal(err.Error())
 		panic("Migration 010 failed: add legal_description / registry_deep_link / assessor_pid columns")
+	}
+
+	_, err = db.Exec(addRegistryCoordinates)
+	if err != nil {
+		log.Fatal(err.Error())
+		panic("Migration 011 failed: add registry_book / registry_page columns")
 	}
 
 	log.Print("Succesfully initialized tables!")

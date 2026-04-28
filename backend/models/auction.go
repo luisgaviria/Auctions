@@ -29,6 +29,8 @@ type AuctionModel struct {
 	RegistryURL      sql.NullString `json:"-"` // nullable; unwrapped in ToJSON()
 	AssessorPID      sql.NullString `json:"-"` // VGSI parcel ID; set by second-pass scraper
 	RegistryDeepLink sql.NullString `json:"-"` // masslandrecords.com book/page deep link
+	RegistryBook     sql.NullInt64  `json:"-"` // numeric book number for dynamic URL building
+	RegistryPage     sql.NullInt64  `json:"-"` // numeric page number for dynamic URL building
 }
 
 // AuctionJSON is the API response shape. Date is a human-readable string ("Jan 2, 2006")
@@ -52,6 +54,8 @@ type AuctionJSON struct {
 	RegistryURL      string `json:"registry_url"`
 	RegistryDeepLink string `json:"registry_deep_link,omitempty"`
 	AssessorPID      string `json:"assessor_pid,omitempty"`
+	RegistryBook     int    `json:"registry_book,omitempty"`
+	RegistryPage     int    `json:"registry_page,omitempty"`
 }
 
 // DueDiligenceItem is one task in the shareable property report checklist.
@@ -94,5 +98,7 @@ func (a AuctionModel) ToJSON() AuctionJSON {
 		RegistryURL:      a.RegistryURL.String,
 		RegistryDeepLink: a.RegistryDeepLink.String,
 		AssessorPID:      a.AssessorPID.String,
+		RegistryBook:     int(a.RegistryBook.Int64),
+		RegistryPage:     int(a.RegistryPage.Int64),
 	}
 } 

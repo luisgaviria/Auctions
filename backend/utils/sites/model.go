@@ -20,6 +20,8 @@ type Auction struct {
 	AddressSlug      string
 	LegalDescription string // raw Book/Page citation from the notice, e.g. "B13812/P506"
 	RegistryDeepLink string // computed masslandrecords.com deep link (book+page pre-filled)
+	RegistryBook     int    // numeric book number extracted from LegalDescription
+	RegistryPage     int    // numeric page number extracted from LegalDescription
 }
 
 func (auction *Auction) Print() {

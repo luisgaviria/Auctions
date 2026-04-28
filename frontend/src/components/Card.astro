@@ -15,13 +15,18 @@ interface Props {
   streetViewUrl?: string;
   registryUrl?: string;
   registryDeepLink?: string;
+  registryBook?: number;
+  registryPage?: number;
   nearbyLandmarks?: string[];
 }
 
-const { id, link, date, time: auctionTime, address, city, state, status, deposit, siteName, logo, zillowUrl, streetViewUrl, registryUrl, registryDeepLink, nearbyLandmarks } =
+const { id, link, date, time: auctionTime, address, city, state, status, deposit, siteName, logo, zillowUrl, streetViewUrl, registryUrl, registryDeepLink, registryBook, registryPage, nearbyLandmarks } =
   Astro.props;
 
-const effectiveRegistryUrl = registryDeepLink || registryUrl;
+const effectiveRegistryUrl =
+  (registryBook && registryPage && registryUrl)
+    ? `${registryUrl}/Default.aspx?p=BookSearch&b=${registryBook}&pg=${registryPage}`
+    : registryDeepLink || registryUrl;
 
 function toISODate(str: string): string {
   if (!str) return '';

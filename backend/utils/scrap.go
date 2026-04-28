@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,10 +28,10 @@ var upsertAuctionSQL = `
 	INSERT INTO auctions
 		(address, city, state, time, logo, site_name, status, link, date, deposit, lat, lng,
 		 zillow_url, street_view_url, registry_url, last_seen, city_slug, county_slug, address_slug,
-		 legal_description, registry_deep_link, assessor_pid)
+		 legal_description, registry_deep_link, assessor_pid, registry_book, registry_page)
 	VALUES
 		($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), $16, $17, $18,
-		 $19, $20, $21)
+		 $19, $20, $21, $22, $23)
 	ON CONFLICT ON CONSTRAINT uq_auctions_address_site DO UPDATE
 		SET
 			status            = CASE WHEN auctions.status  IS DISTINCT FROM EXCLUDED.status
@@ -49,6 +50,8 @@ var upsertAuctionSQL = `
 			legal_description  = COALESCE(EXCLUDED.legal_description,  auctions.legal_description),
 			registry_deep_link = COALESCE(EXCLUDED.registry_deep_link, auctions.registry_deep_link),
 			assessor_pid       = COALESCE(EXCLUDED.assessor_pid,        auctions.assessor_pid),
+			registry_book      = COALESCE(EXCLUDED.registry_book,       auctions.registry_book),
+			registry_page      = COALESCE(EXCLUDED.registry_page,       auctions.registry_page),
 			last_seen         = EXCLUDED.last_seen,
 			updated_at        = NOW()
 	RETURNING id;`
@@ -378,9 +381,13 @@ func NormalizeAuction(a sites.Auction) sites.Auction {
 	a.Time = normalizeTime(a.Time)
 	a.ZillowURL, a.StreetViewURL, a.RegistryURL = buildAuctionURLs(a.Street, a.City)
 
-	// Build registry deep link if the scraper provided a legal description.
+	// Extract Book/Page coordinates from the legal description and store both
+	// the numeric fields (for frontend dynamic URL building) and the pre-built
+	// deep link (for backward compatibility).
 	if a.LegalDescription != "" {
 		book, page := ExtractBookPage(a.LegalDescription)
+		a.RegistryBook = atoiSafe(book)
+		a.RegistryPage = atoiSafe(page)
 		a.RegistryDeepLink = BuildRegistryDeepLink(a.City, book, page)
 	}
 
@@ -505,6 +512,19 @@ func nullIfEmpty(s string) interface{} {
 	return s
 }
 
+func nullIfZero(n int) interface{} {
+	if n == 0 {
+		return nil
+	}
+	return n
+}
+
+// atoiSafe converts a string to int, returning 0 on any parse error.
+func atoiSafe(s string) int {
+	n, _ := strconv.Atoi(strings.TrimSpace(s))
+	return n
+}
+
 func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 	// Skip auctions whose date has already passed (strictly before today in ET).
 	// Same-day auctions whose time has elapsed are kept: we still upsert them
@@ -563,6 +583,8 @@ func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 		nullIfEmpty(a.LegalDescription),  // $19 legal_description
 		nullIfEmpty(a.RegistryDeepLink),  // $20 registry_deep_link
 		nil,                              // $21 assessor_pid (set by second-pass)
+		nullIfZero(a.RegistryBook),       // $22 registry_book
+		nullIfZero(a.RegistryPage),       // $23 registry_page
 	).Scan(&id)
 	if err != nil {
 		log.Printf("[upsert] error for %q (%s): %v", a.Street, a.SiteName, err)
@@ -772,7 +794,7 @@ func backfillRegistryDeepLinks(ctx context.Context, db *sql.DB) {
 		SELECT id, legal_description, city FROM auctions
 		WHERE legal_description IS NOT NULL
 		  AND legal_description != ''
-		  AND (registry_deep_link IS NULL OR registry_deep_link = '')`
+		  AND (registry_book IS NULL OR registry_page IS NULL)`
 
 	rows, err := db.QueryContext(ctx, sel)
 	if err != nil {
@@ -798,13 +820,15 @@ func backfillRegistryDeepLinks(ctx context.Context, db *sql.DB) {
 	fixed := 0
 	for _, r := range toFix {
 		book, page := ExtractBookPage(r.legal)
-		link := BuildRegistryDeepLink(r.city, book, page)
-		if link == "" {
-			continue // book/page not found in this legal description
+		if book == "" || page == "" {
+			continue
 		}
+		link := BuildRegistryDeepLink(r.city, book, page)
+		bookInt := nullIfZero(atoiSafe(book))
+		pageInt := nullIfZero(atoiSafe(page))
 		_, err := db.ExecContext(ctx,
-			`UPDATE auctions SET registry_deep_link=$1 WHERE id=$2`,
-			link, r.id)
+			`UPDATE auctions SET registry_book=$1, registry_page=$2, registry_deep_link=$3 WHERE id=$4`,
+			bookInt, pageInt, link, r.id)
 		if err != nil {
 			log.Printf("[backfill-deeplinks] update id=%d: %v", r.id, err)
 		} else {
