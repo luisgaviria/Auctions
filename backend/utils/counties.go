@@ -2,6 +2,17 @@ package utils
 
 import "strings"
 
+// normalizeCity strips a state suffix ("Southbridge, Massachusetts" →
+// "SOUTHBRIDGE") and uppercases the result so all city lookups are
+// case-insensitive and state-suffix-insensitive.
+func normalizeCity(city string) string {
+	s := strings.TrimSpace(city)
+	if i := strings.Index(s, ","); i != -1 {
+		s = strings.TrimSpace(s[:i])
+	}
+	return strings.ToUpper(s)
+}
+
 // registryURLs maps each MA Registry of Deeds to its direct search portal.
 // URLs sourced from massrods.com (Massachusetts Registers of Deeds Association).
 var registryURLs = map[string]string{
@@ -460,7 +471,7 @@ var cityToRegistry = map[string]string{
 // "FALL RIVER") are stripped so all towns in the same county share one name.
 // Returns "" when the city is not in the map.
 func GetCounty(city string) string {
-	key := strings.ToUpper(strings.TrimSpace(city))
+	key := normalizeCity(city)
 	registry, ok := cityToRegistry[key]
 	if !ok {
 		return ""
@@ -472,7 +483,7 @@ func GetCounty(city string) string {
 }
 
 func GetRegistryURL(city string) string {
-	key := strings.ToUpper(strings.TrimSpace(city))
+	key := normalizeCity(city)
 	if registry, ok := cityToRegistry[key]; ok {
 		if url, ok := registryURLs[registry]; ok {
 			return url

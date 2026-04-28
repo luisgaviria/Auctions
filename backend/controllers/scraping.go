@@ -23,9 +23,9 @@ func (c *ScrapingController) StartScraping(w http.ResponseWriter, r *http.Reques
 
 	// The HTTP request context is cancelled as soon as the response is sent,
 	// so we detach from it and use a fresh context with an explicit timeout.
-	// 10 minutes is generous for 12 parallel scrapers.
+	// 60 minutes covers scrapers + assessor/registry enrichment second passes.
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 		defer cancel()
 		utils.ScrapAllSites(ctx, c.DB)
 	}()

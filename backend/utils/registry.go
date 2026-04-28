@@ -7,9 +7,11 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -46,31 +48,33 @@ func ExtractBookPage(legal string) (book, page string) {
 
 // ── Registry deep-link builder ────────────────────────────────────────────────
 
-// BuildRegistryDeepLink returns a masslandrecords.com URL that pre-fills the
-// Book/Page search for the given city.  Returns "" when the city is not mapped
-// or when book/page are empty.
+// BuildRegistryDeepLink returns a masslandrecords.com URL that opens the
+// Book/Page search directly for the given city's registry district.
+// Returns "" when the city is not mapped or when book is empty.
 //
-// masslandrecords.com runs Fidlar LAREDO; the hash-fragment query format is:
-//   {districtURL}/#page=searchEntry&searchtype=Standard&recordtype=MR&book={B}&bookpage={P}
-// where MR = Mortgage (the record type cited in foreclosure notices).
+// Verified URL format (Worcester district, Book 61467 Page 24):
+//   https://www.masslandrecords.com/Worcester/Default.aspx?p=BookSearch&b=61467&pg=24
+//
+// City may include a state suffix ("Southbridge, Massachusetts") — normalised
+// automatically before the registry-district lookup.
+// page is optional: when empty, a book-only search URL is returned.
 func BuildRegistryDeepLink(city, book, page string) string {
-	if book == "" || page == "" {
+	if book == "" {
 		return ""
 	}
 	base := GetRegistryURL(city)
+	// GetRegistryURL returns the generic portal when city is unknown — skip those.
 	if base == "" || base == "https://www.masslandrecords.com" {
-		// Barnstable uses its own portal — direct book/page linking not available.
-		if strings.EqualFold(GetCounty(city), "Barnstable") {
-			return ""
-		}
-		if base == "" {
-			return ""
-		}
+		return ""
 	}
-	return fmt.Sprintf(
-		"%s/#page=searchEntry&searchtype=Standard&recordtype=MR&book=%s&bookpage=%s",
-		base, url.QueryEscape(book), url.QueryEscape(page),
-	)
+	// Barnstable uses its own portal — query-string format not available.
+	if strings.EqualFold(GetCounty(city), "Barnstable") {
+		return ""
+	}
+	if page == "" {
+		return fmt.Sprintf("%s/Default.aspx?p=BookSearch&b=%s", base, book)
+	}
+	return fmt.Sprintf("%s/Default.aspx?p=BookSearch&b=%s&pg=%s", base, book, page)
 }
 
 // ── Vision Government Solutions (VGSI) assessor portal ───────────────────────
@@ -178,9 +182,10 @@ var vgsiTowns = map[string]string{
 }
 
 // GetVGSIBaseURL returns the VGSI base URL for a MA city, or "" if the city
-// is not in the map.  Lookup is case-insensitive.
+// is not in the map.  Lookup is case-insensitive; state suffixes like
+// ", Massachusetts" are stripped automatically.
 func GetVGSIBaseURL(city string) string {
-	return vgsiTowns[strings.ToUpper(strings.TrimSpace(city))]
+	return vgsiTowns[normalizeCity(city)]
 }
 
 // BuildAssessorURL constructs the full VGSI parcel detail URL from a PID.
@@ -198,38 +203,81 @@ func BuildAssessorURL(city, pid string) string {
 // pidRe extracts the numeric PID from a VGSI Parcel.aspx URL.
 var pidRe = regexp.MustCompile(`(?i)[?&]pid=(\d+)`)
 
-// vgsiHTTPClient is used for all VGSI requests.  Timeout is generous because
-// VGSI sites can be slow; a 15-second per-request ceiling prevents runaway goroutines.
-var vgsiHTTPClient = &http.Client{
-	Timeout: 15 * time.Second,
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		// Allow up to 5 redirects (ASP.NET sometimes chains a couple).
-		if len(via) >= 5 {
-			return http.ErrUseLastResponse
-		}
-		return nil
-	},
+// desktopUA is a modern Chrome user-agent string.  Government portals (VGSI)
+// often block obvious bot strings like "AuctionBot/1.0".
+const desktopUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+// vgsiDisclaimerCookies lists every cookie name VGSI portals use to gate the
+// disclaimer page.  Pre-seeding all of them bypasses the splash screen so the
+// search form is returned directly on the first request.
+var vgsiDisclaimerCookies = []*http.Cookie{
+	{Name: "VisionDisclaimer", Value: "accepted", Path: "/"},
+	{Name: "vicisDisclaimer",  Value: "true",     Path: "/"},
+	{Name: "disclaimer",       Value: "true",     Path: "/"},
+	{Name: "Disclaimer",       Value: "accepted", Path: "/"},
 }
 
-// FetchAssessorPID queries the VGSI assessor portal for the given street+city,
-// submits a POST search, and returns the numeric PID from the resulting URL.
-// Returns ("", nil) when the city has no VGSI portal or the property is not found.
-// Returns ("", err) on network / parse errors.
-func FetchAssessorPID(ctx context.Context, street, city string) (string, error) {
-	baseURL := GetVGSIBaseURL(city)
-	if baseURL == "" {
-		return "", nil // city not in VGSI map — not an error
+// newVGSIClient creates a per-call HTTP client with its own cookie jar.
+// Disclaimer cookies are pre-seeded for the given base URL so the portal
+// serves the search form directly instead of a splash/disclaimer page.
+// A modern desktop User-Agent is set on every request via the header helpers
+// below; this client intentionally does NOT set a global Transport UA.
+func newVGSIClient(baseURL string) *http.Client {
+	jar, _ := cookiejar.New(nil)
+	if u, err := url.Parse(baseURL); err == nil {
+		jar.SetCookies(u, vgsiDisclaimerCookies)
 	}
-	searchURL := baseURL + "/Search.aspx"
+	return &http.Client{
+		Timeout: 15 * time.Second,
+		Jar:     jar,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+	}
+}
 
-	// Step 1: GET the search page to retrieve ASP.NET hidden fields + control IDs.
+// vgsiHeaders adds standard browser headers to a request so it is
+// indistinguishable from a normal Chrome GET/POST.
+func vgsiHeaders(req *http.Request, referer string) {
+	req.Header.Set("User-Agent", desktopUA)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	if referer != "" {
+		req.Header.Set("Referer", referer)
+	}
+}
+
+// vgsiRangeRe matches a leading street-number range (e.g. "193-195").
+// Group 1 captures only the first number for the simplified retry.
+var vgsiRangeRe = regexp.MustCompile(`^(\d+)-\d+\b`)
+
+// vgsiUnitRe matches common unit suffixes: "APT 2", "UNIT B", "#3", etc.
+var vgsiUnitRe = regexp.MustCompile(`(?i)[,\s]+(?:apt|unit|ste|suite|#|fl|floor)\s*[\w-]+\s*$`)
+
+// simplifyVGSIAddr returns a shorter search-friendly version of a normalized
+// street string by stripping hyphenated ranges and unit designators.
+// Returns the input unchanged when no simplification applies.
+func simplifyVGSIAddr(s string) string {
+	s = vgsiRangeRe.ReplaceAllString(s, "$1")
+	s = vgsiUnitRe.ReplaceAllString(s, "")
+	return strings.TrimSpace(s)
+}
+
+// vgsiSearchOnce performs a single GET→POST cycle against a VGSI Search.aspx
+// page using addrText as the address query.  Returns the PID string on success,
+// "" when the property is not found, or an error on network/parse failure.
+// A fresh GET is required each time because ASP.NET __VIEWSTATE is request-scoped.
+func vgsiSearchOnce(ctx context.Context, client *http.Client, searchURL, referer, addrText string) (string, error) {
 	getReq, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
 	if err != nil {
-		return "", fmt.Errorf("vgsi get request: %w", err)
+		return "", fmt.Errorf("vgsi get: %w", err)
 	}
-	getReq.Header.Set("User-Agent", "Mozilla/5.0 (compatible; AuctionBot/1.0)")
+	vgsiHeaders(getReq, referer)
 
-	resp, err := vgsiHTTPClient.Do(getReq)
+	resp, err := client.Do(getReq)
 	if err != nil {
 		return "", fmt.Errorf("vgsi GET %s: %w", searchURL, err)
 	}
@@ -237,34 +285,34 @@ func FetchAssessorPID(ctx context.Context, street, city string) (string, error) 
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("vgsi parse form: %w", err)
+		return "", fmt.Errorf("vgsi parse: %w", err)
 	}
 
-	// Collect all ASP.NET hidden fields.
+	// Collect ASP.NET hidden fields (ViewState, EventValidation, …).
 	formFields := url.Values{}
 	doc.Find("input[type=hidden]").Each(func(_ int, s *goquery.Selection) {
-		name, _ := s.Attr("name")
-		val, _ := s.Attr("value")
-		if name != "" {
+		if name, _ := s.Attr("name"); name != "" {
+			val, _ := s.Attr("value")
 			formFields.Set(name, val)
 		}
 	})
 
-	// Find the address text input — look for "txtAddress" in the control ID.
+	// Locate the address text box — VGSI IDs it with "txtAddress".
 	addrField := ""
 	doc.Find("input[type=text]").Each(func(_ int, s *goquery.Selection) {
 		name, _ := s.Attr("name")
 		id, _ := s.Attr("id")
-		if strings.Contains(strings.ToLower(id), "txtaddress") ||
-			strings.Contains(strings.ToLower(name), "txtaddress") {
+		lo := strings.ToLower
+		if strings.Contains(lo(id), "txtaddress") || strings.Contains(lo(name), "txtaddress") {
 			addrField = name
 		}
 	})
 	if addrField == "" {
-		return "", fmt.Errorf("vgsi: could not find address field on %s", searchURL)
+		// Disclaimer or splash page was returned — cookies didn't bypass it.
+		log.Printf("[assessor] no address field on %s — disclaimer page may still be active", searchURL)
+		return "", nil
 	}
 
-	// Find the search button name (needed for ASP.NET postback).
 	btnField := ""
 	doc.Find("input[type=submit], input[type=button]").Each(func(_ int, s *goquery.Selection) {
 		name, _ := s.Attr("name")
@@ -274,78 +322,199 @@ func FetchAssessorPID(ctx context.Context, street, city string) (string, error) 
 		}
 	})
 
-	// Build POST body: hidden fields + address + submit button.
-	formFields.Set(addrField, NormalizeStreet(street)) // e.g. "123 MAIN ST"
+	formFields.Set(addrField, addrText)
 	if btnField != "" {
 		formFields.Set(btnField, "Search")
 	}
 	formFields.Set("__EVENTTARGET", "")
 	formFields.Set("__EVENTARGUMENT", "")
 
-	// Step 2: POST the search form.
 	postReq, err := http.NewRequestWithContext(ctx, http.MethodPost, searchURL,
 		strings.NewReader(formFields.Encode()))
 	if err != nil {
-		return "", fmt.Errorf("vgsi post request: %w", err)
+		return "", fmt.Errorf("vgsi post: %w", err)
 	}
 	postReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	postReq.Header.Set("User-Agent", "Mozilla/5.0 (compatible; AuctionBot/1.0)")
-	postReq.Header.Set("Referer", searchURL)
+	vgsiHeaders(postReq, searchURL)
 
-	postResp, err := vgsiHTTPClient.Do(postReq)
+	postResp, err := client.Do(postReq)
 	if err != nil {
 		return "", fmt.Errorf("vgsi POST %s: %w", searchURL, err)
 	}
 	defer postResp.Body.Close()
 
-	// The final URL after redirects often contains ?pid=XXXXX.
 	if m := pidRe.FindStringSubmatch(postResp.Request.URL.String()); len(m) == 2 {
 		return m[1], nil
 	}
-
-	// No immediate redirect to a parcel page — parse the result HTML for links.
 	body, err := io.ReadAll(postResp.Body)
 	if err != nil {
 		return "", fmt.Errorf("vgsi read body: %w", err)
 	}
-
-	// Look for the first Parcel.aspx?pid=X link in the response.
 	if m := pidRe.FindStringSubmatch(string(body)); len(m) == 2 {
 		return m[1], nil
 	}
+	return "", nil
+}
 
-	return "", nil // no match found — not an error
+// FetchAssessorPID queries the VGSI assessor portal for the given street+city
+// and returns the numeric parcel PID.
+// Returns ("", nil) for non-VGSI cities or when the property is not found.
+// Two search attempts are made: the full normalized address first, then a
+// simplified version that strips hyphenated ranges (193-195 → 193) and unit
+// designators (APT, UNIT, #, etc.) so ambiguous addresses still resolve.
+func FetchAssessorPID(ctx context.Context, street, city string) (string, error) {
+	baseURL := GetVGSIBaseURL(city)
+	if baseURL == "" {
+		return "", nil
+	}
+	searchURL := baseURL + "/Search.aspx"
+	client := newVGSIClient(baseURL)
+
+	// Step 0: warm session — visit home page to collect any additional cookies
+	// the portal sets on first load (session ID, anti-CSRF tokens, etc.).
+	if homeReq, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/", nil); err == nil {
+		vgsiHeaders(homeReq, "")
+		if homeResp, herr := client.Do(homeReq); herr == nil {
+			homeResp.Body.Close()
+		}
+	}
+
+	normalized := NormalizeStreet(street)
+
+	// Attempt 1: full normalized address.
+	pid, err := vgsiSearchOnce(ctx, client, searchURL, baseURL+"/", normalized)
+	if err != nil {
+		return "", err
+	}
+	if pid != "" {
+		log.Printf("[assessor] found pid=%s addr=%q city=%q", pid, normalized, city)
+		return pid, nil
+	}
+
+	// Attempt 2: simplified address (strip range / unit).
+	if simplified := simplifyVGSIAddr(normalized); simplified != normalized {
+		log.Printf("[assessor] retrying simplified addr=%q (original=%q)", simplified, normalized)
+		pid, err = vgsiSearchOnce(ctx, client, searchURL, baseURL+"/", simplified)
+		if err != nil {
+			return "", err
+		}
+		if pid != "" {
+			log.Printf("[assessor] found pid=%s simplified addr=%q city=%q", pid, simplified, city)
+			return pid, nil
+		}
+	}
+
+	return "", nil
+}
+
+// ── Chain-of-title: deed link from VGSI parcel page ─────────────────────────
+
+// fetchDeedLinkFromParcel GETs the VGSI Parcel page for the given pid and
+// returns a registry deep link built from the most recent sale's Book/Page.
+// Returns "" when the page cannot be fetched, has no sales table, or the
+// first row has no Book/Page — all non-fatal.
+func fetchDeedLinkFromParcel(ctx context.Context, baseURL, pid, city string) string {
+	if pid == "" || baseURL == "" {
+		return ""
+	}
+	parcelURL := baseURL + "/Parcel.aspx?pid=" + url.QueryEscape(pid)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parcelURL, nil)
+	if err != nil {
+		return ""
+	}
+	vgsiHeaders(req, baseURL+"/Search.aspx")
+
+	client := newVGSIClient(baseURL)
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[assessor] parcel fetch pid=%s: %v", pid, err)
+		return ""
+	}
+	defer resp.Body.Close()
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return ""
+	}
+
+	// Walk every <table> looking for one whose header row contains both
+	// "book" and "page" columns — that is the Sales / Ownership History table.
+	var deedLink string
+	doc.Find("table").EachWithBreak(func(_ int, tbl *goquery.Selection) bool {
+		colIdx := map[string]int{}
+		tbl.Find("tr").First().Find("th, td").Each(func(i int, cell *goquery.Selection) {
+			h := strings.TrimSpace(strings.ToLower(cell.Text()))
+			if h == "book" || h == "page" {
+				colIdx[h] = i
+			}
+		})
+		bookCol, hasBook := colIdx["book"]
+		pageCol, hasPage := colIdx["page"]
+		if !hasBook || !hasPage {
+			return true // not the sales table — keep searching
+		}
+
+		// The first data row (index 1) is the most recent sale.
+		allRows := tbl.Find("tr")
+		if allRows.Length() < 2 {
+			return false
+		}
+		cells := allRows.Eq(1).Find("td")
+		book := strings.TrimSpace(cells.Eq(bookCol).Text())
+		page := strings.TrimSpace(cells.Eq(pageCol).Text())
+		if book != "" && page != "" {
+			deedLink = BuildRegistryDeepLink(city, book, page)
+		}
+		return false // stop after first matching table
+	})
+
+	if deedLink != "" {
+		log.Printf("[assessor] deed link found pid=%s city=%q: %s", pid, city, deedLink)
+	}
+	return deedLink
 }
 
 // ── Second-pass assessor enrichment ─────────────────────────────────────────
 
-// RunAssessorSecondPass queries all rows where assessor_pid is NULL and the
-// city has a known VGSI portal, then attempts to fetch and store the PID.
-// This is designed to run once after the main scrape completes.
-// Requests are rate-limited to one per second to be a good citizen.
+// RunAssessorSecondPass queries rows where assessor_pid OR registry_deep_link is
+// still NULL (so rows where both are already populated are skipped entirely —
+// no external government portal is hit for them).
+// For each candidate it fetches the VGSI PID, then scrapes the Sales History
+// table for the deed Book/Page to build a Level-1 registry deep link.
+// Work is distributed across a pool of 3 parallel workers; every successful
+// result is committed immediately so a timeout cannot discard partial progress.
 func RunAssessorSecondPass(ctx context.Context, db *sql.DB) {
+	const numWorkers = 3
+
+	// Count rows that are already fully enriched (both fields present).
+	var alreadyEnriched int
+	db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM auctions
+		WHERE assessor_pid    IS NOT NULL AND assessor_pid    != ''
+		  AND registry_deep_link IS NOT NULL AND registry_deep_link != ''`).Scan(&alreadyEnriched)
+
+	// Only fetch rows that are still missing at least one enrichment field.
 	const sel = `
 		SELECT id, address, city FROM auctions
-		WHERE assessor_pid IS NULL
+		WHERE (assessor_pid IS NULL OR registry_deep_link IS NULL)
 		  AND city IS NOT NULL AND city != ''`
 
 	rows, err := db.QueryContext(ctx, sel)
 	if err != nil {
-		log.Printf("[assessor] second-pass query error: %v", err)
+		log.Printf("[Enrichment] query error: %v", err)
 		return
 	}
 	defer rows.Close()
 
-	type row struct {
+	type candidate struct {
 		id      int
 		address string
 		city    string
 	}
-	var candidates []row
+	var candidates []candidate
 	for rows.Next() {
-		var r row
+		var r candidate
 		if err := rows.Scan(&r.id, &r.address, &r.city); err == nil {
-			// Only include cities that are in the VGSI map.
 			if GetVGSIBaseURL(r.city) != "" {
 				candidates = append(candidates, r)
 			}
@@ -353,36 +522,75 @@ func RunAssessorSecondPass(ctx context.Context, db *sql.DB) {
 	}
 	rows.Close()
 
-	log.Printf("[assessor] second-pass: %d properties to enrich", len(candidates))
-	enriched := 0
+	log.Printf("[Enrichment] Found %d deals needing research. Skipping %d already enriched. Starting %d parallel workers.",
+		len(candidates), alreadyEnriched, numWorkers)
 
-	for _, c := range candidates {
-		select {
-		case <-ctx.Done():
-			log.Printf("[assessor] second-pass cancelled after %d/%d", enriched, len(candidates))
-			return
-		default:
-		}
-
-		pid, err := FetchAssessorPID(ctx, c.address, c.city)
-		if err != nil {
-			log.Printf("[assessor] id=%d addr=%q city=%q error: %v", c.id, c.address, c.city, err)
-		} else if pid != "" {
-			_, upErr := db.ExecContext(ctx,
-				`UPDATE auctions SET assessor_pid=$1 WHERE id=$2`,
-				pid, c.id,
-			)
-			if upErr != nil {
-				log.Printf("[assessor] update id=%d: %v", c.id, upErr)
-			} else {
-				log.Printf("[assessor] enriched id=%d pid=%s addr=%q", c.id, pid, c.address)
-				enriched++
-			}
-		}
-
-		// 1-second delay between VGSI requests to avoid rate limiting.
-		time.Sleep(time.Second)
+	if len(candidates) == 0 {
+		return
 	}
 
-	log.Printf("[assessor] second-pass complete: enriched %d/%d", enriched, len(candidates))
+	work := make(chan candidate, len(candidates))
+	for _, c := range candidates {
+		work <- c
+	}
+	close(work)
+
+	var (
+		mu       sync.Mutex
+		enriched int
+	)
+
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for c := range work {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
+				pid, err := FetchAssessorPID(ctx, c.address, c.city)
+				if err != nil {
+					log.Printf("[Enrichment] id=%d addr=%q city=%q pid error: %v", c.id, c.address, c.city, err)
+					time.Sleep(time.Second)
+					continue
+				}
+				if pid == "" {
+					time.Sleep(time.Second)
+					continue
+				}
+
+				// Level 1: deed Book/Page from the Sales History table.
+				deedLink := fetchDeedLinkFromParcel(ctx, GetVGSIBaseURL(c.city), pid, c.city)
+
+				// Commit immediately — partial progress is never lost.
+				var upErr error
+				if deedLink != "" {
+					_, upErr = db.ExecContext(ctx,
+						`UPDATE auctions SET assessor_pid=$1, registry_deep_link=$2 WHERE id=$3`,
+						pid, deedLink, c.id)
+				} else {
+					_, upErr = db.ExecContext(ctx,
+						`UPDATE auctions SET assessor_pid=$1 WHERE id=$2`,
+						pid, c.id)
+				}
+				if upErr != nil {
+					log.Printf("[Enrichment] db update id=%d: %v", c.id, upErr)
+				} else {
+					log.Printf("[Enrichment] id=%d pid=%s deed=%q addr=%q", c.id, pid, deedLink, c.address)
+					mu.Lock()
+					enriched++
+					mu.Unlock()
+				}
+
+				time.Sleep(time.Second)
+			}
+		}()
+	}
+	wg.Wait()
+
+	log.Printf("[Enrichment] complete: enriched %d/%d", enriched, len(candidates))
 }

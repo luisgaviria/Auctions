@@ -22,13 +22,20 @@ const cfJobEndpoint = "https://api.cloudflare.com/client/v4/accounts/%s/browser-
 // wait, type). Those require a Workers Binding with Puppeteer/Playwright.
 // CFetch is therefore a pure "render this URL and return HTML" utility.
 
+// cfWaitForSelector wraps the CSS selector string in the object format
+// expected by the CF Browser Rendering API: {"selector": ".class"}.
+// Passing a plain string causes an invalid_union validation error.
+type cfWaitForSelector struct {
+	Selector string `json:"selector"`
+}
+
 type cfCrawlRequest struct {
-	URL             string         `json:"url"`
-	Formats         []string       `json:"formats"`                       // ["html"]
-	Depth           int            `json:"depth"`                         // 0 = target URL only, no link following
-	GotoOptions     *cfGotoOptions `json:"gotoOptions,omitempty"`         // navigation options
-	WaitForSelector string         `json:"waitForSelector,omitempty"`     // block until selector appears in DOM
-	Wait            int            `json:"wait,omitempty"`                // ms to pause after page load before returning HTML
+	URL             string              `json:"url"`
+	Formats         []string            `json:"formats"`               // ["html"]
+	Depth           int                 `json:"depth"`                 // 0 = target URL only, no link following
+	GotoOptions     *cfGotoOptions      `json:"gotoOptions,omitempty"` // navigation options
+	WaitForSelector *cfWaitForSelector  `json:"waitForSelector,omitempty"` // block until selector appears in DOM
+	Wait            int                 `json:"wait,omitempty"`        // ms to pause after page load before returning HTML
 }
 
 type cfGotoOptions struct {
@@ -103,11 +110,15 @@ func cfetch(ctx context.Context, targetURL, waitForSelector string, waitMs int) 
 		return "", fmt.Errorf("cfetch: CF_ACCOUNT_ID or CF_API_TOKEN not set in environment")
 	}
 
+	var wfs *cfWaitForSelector
+	if waitForSelector != "" {
+		wfs = &cfWaitForSelector{Selector: waitForSelector}
+	}
 	payload := cfCrawlRequest{
 		URL:             targetURL,
 		Formats:         []string{"html"},
 		Depth:           1,
-		WaitForSelector: waitForSelector,
+		WaitForSelector: wfs,
 		Wait:            waitMs,
 		GotoOptions: &cfGotoOptions{
 			WaitUntil: "networkidle0",

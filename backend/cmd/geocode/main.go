@@ -51,8 +51,8 @@ func main() {
 	}
 	log.Println("[geocode] connected to database")
 
-	// 10-minute ceiling — enough to backfill hundreds of rows at 5 req/s.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	// 60-minute ceiling — enough to backfill hundreds of rows at 5 req/s.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	defer cancel()
 
 	utils.RunGeocodeWorker(ctx, db)

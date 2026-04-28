@@ -62,8 +62,10 @@ func main() {
 	// Apply any pending schema migrations (idempotent — safe on every run).
 	utils.InitTables(db)
 
-	// 15 minutes: generous ceiling for 12 parallel scrapers + cleanup phase.
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	// 60 minutes: covers all 12 parallel scrapers + sweep phase.
+	// Enrichment (assessor/registry) runs under its own independent context
+	// inside ScrapAllSites so it is unaffected by this deadline.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	defer cancel()
 
 	// ── Full scrape + upsert + cleanup ───────────────────────────────────────

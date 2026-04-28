@@ -148,6 +148,11 @@ func GenerateSlug(s string) string {
 // redundant long-form token and correctly lands on the preceding "MA".
 var maTokenRe = regexp.MustCompile(`(?i)^MA(\s+\d{5}(-\d{4})?)?$`)
 
+// cityLegalStripRe removes legal-description boilerplate that leaks into the
+// city field when scrapers embed Book/Page text on the same line as the address.
+// e.g. "MA, PAGE 98" → "MA", "MILLBURY, Book 45231" → "MILLBURY"
+var cityLegalStripRe = regexp.MustCompile(`(?i)[,\s]+(Recorded\b|See\s+Mortgage|Book\s+\d|Bk\.?\s*\d|Page\s+\d|Pg\.?\s*\d|B\d{4,}\b).*$`)
+
 // addrTitleCase returns s in title case, e.g. "HAVERHILL" → "Haverhill".
 // Used only for city/street display — stored fields are already uppercased by
 // NormalizeStreet so this is called before that step.
@@ -178,6 +183,9 @@ func addrTitleCase(s string) string {
 // case.  Falls back to rawAddr/rawCity unchanged if no MA token is found.
 func CleanAuctionData(rawAddr, rawCity string) (street, city string) {
 	trimCity := strings.TrimSpace(rawCity)
+
+	// Strip legal-description boilerplate that may have leaked into the city field.
+	trimCity = strings.TrimSpace(cityLegalStripRe.ReplaceAllString(trimCity, ""))
 
 	// If rawCity is already a specific town, honour it and just strip the
 	// city+state tail from the address so the street field stays clean.
@@ -960,22 +968,37 @@ func DryRunCFScrapers(ctx context.Context, db *sql.DB) {
 // The context controls the overall timeout and propagates cancellation to all
 // Cloudflare HTTP calls and database queries.
 func ScrapAllSites(ctx context.Context, db *sql.DB) {
-	// 1. Standardize any non-ISO dates in the DB so the purge comparison works.
+	// Pre-scrape maintenance: fast DB-only operations, no external HTTP.
 	migrateNonISODates(ctx, db)
-	// 2. Remove any row whose date has already passed (ET-aware).
 	purgePastAuctions(ctx, db)
-	// 3. Populate URL columns for any rows that predate the URL feature.
 	backfillMissingURLs(ctx, db)
-	// 4. Populate slug columns and fix any "Massachusetts" city placeholders.
 	backfillSlugs(ctx, db)
-	// 5. Compute registry deep links for rows that have a legal description but no link yet.
-	backfillRegistryDeepLinks(ctx, db)
+	// NOTE: backfillRegistryDeepLinks and RunAssessorSecondPass run in the
+	// enrichment phase AFTER all 12 scrapers have committed their data.
+
+	// Build a deposit cache for Patriot so detail page crawls are skipped for
+	// properties whose deposit is already stored.  This saves one CF Browser
+	// Rendering call per cached auction.
+	patriotDepositCache := make(map[string]string)
+	if dcRows, dcErr := db.QueryContext(ctx,
+		`SELECT link, deposit FROM auctions WHERE site_name='patriot' AND deposit IS NOT NULL AND deposit != ''`); dcErr == nil {
+		for dcRows.Next() {
+			var link, deposit string
+			if dcRows.Scan(&link, &deposit) == nil && link != "" {
+				patriotDepositCache[link] = deposit
+			}
+		}
+		dcRows.Close()
+		log.Printf("[patriot] deposit cache loaded: %d entries", len(patriotDepositCache))
+	}
 
 	scrapers := []scraperDef{
 		// Cloudflare-migrated scrapers (context-aware, no local Chrome)
 		{"baystate", sites.ScrapBaystate, "https://www.baystateauction.com/auctions/"},
 		{"commonwealth", sites.ScrapCommon, "https://www.commonwealthauctions.com/ma-auctions"},
-		{"patriot", sites.ScrapPatriot, "https://patriotauctioneers.com/auctions-in-massachusetts/"},
+		{"patriot", func(ctx context.Context) ([]sites.Auction, error) {
+			return sites.ScrapPatriotWithCache(ctx, patriotDepositCache)
+		}, "https://patriotauctioneers.com/auctions-in-massachusetts/"},
 
 		// Legacy colly/goquery scrapers (wrapped for uniform interface)
 		{"amg", wrapLegacy(sites.ScrapAMG), ""},
@@ -1077,11 +1100,22 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 	// does not prematurely delete its auctions.
 	sweepStaleAuctions(ctx, db)
 
-	// Assessor second pass — fetch VGSI PIDs for rows that don't have one yet.
-	// Uses a short-timeout child context so a slow VGSI site cannot block forever.
-	assessorCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-	defer cancel()
-	RunAssessorSecondPass(assessorCtx, db)
+	log.Printf("[scraper] Pass 1 complete — all addresses and statuses committed to database")
+
+	// ── Enrichment phase ────────────────────────────────────────────────────────
+	// Uses a FRESH context derived from Background(), NOT from the caller's ctx.
+	// This means the enrichment is never killed by the scrape deadline — even if
+	// the dryrun or HTTP handler's 60-minute timer fires, enrichment continues
+	// independently.  Row-by-row commits mean any partial run is preserved.
+	enrichCtx, enrichCancel := context.WithTimeout(context.Background(), 60*time.Minute)
+	defer enrichCancel()
+
+	// Level 2 (mortgage): compute registry deep links from scraped legal_description.
+	// Fast — pure DB read + string math, no external HTTP.
+	backfillRegistryDeepLinks(enrichCtx, db)
+
+	// Level 1 (deed) + assessor PID: hit VGSI portals for rows still missing data.
+	RunAssessorSecondPass(enrichCtx, db)
 
 	log.Printf("[scraper] run complete")
 }
