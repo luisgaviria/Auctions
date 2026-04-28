@@ -46,37 +46,6 @@ func ExtractBookPage(legal string) (book, page string) {
 	return m[1], m[2]
 }
 
-// ── Registry deep-link builder ────────────────────────────────────────────────
-
-// BuildRegistryDeepLink returns a masslandrecords.com URL that opens the
-// Book/Page search directly for the given city's registry district.
-// Returns "" when the city is not mapped or when book is empty.
-//
-// Verified URL format (Worcester district, Book 61467 Page 24):
-//   https://www.masslandrecords.com/Worcester/Default.aspx?p=BookSearch&b=61467&pg=24
-//
-// City may include a state suffix ("Southbridge, Massachusetts") — normalised
-// automatically before the registry-district lookup.
-// page is optional: when empty, a book-only search URL is returned.
-func BuildRegistryDeepLink(city, book, page string) string {
-	if book == "" {
-		return ""
-	}
-	base := GetRegistryURL(city)
-	// GetRegistryURL returns the generic portal when city is unknown — skip those.
-	if base == "" || base == "https://www.masslandrecords.com" {
-		return ""
-	}
-	// Barnstable uses its own portal — query-string format not available.
-	if strings.EqualFold(GetCounty(city), "Barnstable") {
-		return ""
-	}
-	if page == "" {
-		return fmt.Sprintf("%s/Default.aspx?p=BookSearch&b=%s", base, book)
-	}
-	return fmt.Sprintf("%s/Default.aspx?p=BookSearch&b=%s&pg=%s", base, book, page)
-}
-
 // ── Vision Government Solutions (VGSI) assessor portal ───────────────────────
 
 // vgsiTowns maps MA city/town names (UPPERCASE) to their VGSI base URL.
@@ -407,106 +376,25 @@ func FetchAssessorPID(ctx context.Context, street, city string) (string, error) 
 	return "", nil
 }
 
-// ── Chain-of-title: deed link from VGSI parcel page ─────────────────────────
-
-// deedResult holds the book/page integers and the pre-built deep link URL.
-type deedResult struct {
-	book int
-	page int
-	link string
-}
-
-// fetchDeedLinkFromParcel GETs the VGSI Parcel page for the given pid and
-// returns the most recent sale's Book/Page integers and deep link URL.
-// All fields are zero/empty when the data cannot be found — non-fatal.
-func fetchDeedLinkFromParcel(ctx context.Context, baseURL, pid, city string) deedResult {
-	if pid == "" || baseURL == "" {
-		return deedResult{}
-	}
-	parcelURL := baseURL + "/Parcel.aspx?pid=" + url.QueryEscape(pid)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parcelURL, nil)
-	if err != nil {
-		return deedResult{}
-	}
-	vgsiHeaders(req, baseURL+"/Search.aspx")
-
-	client := newVGSIClient(baseURL)
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("[assessor] parcel fetch pid=%s: %v", pid, err)
-		return deedResult{}
-	}
-	defer resp.Body.Close()
-
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
-	if err != nil {
-		return deedResult{}
-	}
-
-	// Walk every <table> looking for one whose header row contains both
-	// "book" and "page" columns — that is the Sales / Ownership History table.
-	var result deedResult
-	doc.Find("table").EachWithBreak(func(_ int, tbl *goquery.Selection) bool {
-		colIdx := map[string]int{}
-		tbl.Find("tr").First().Find("th, td").Each(func(i int, cell *goquery.Selection) {
-			h := strings.TrimSpace(strings.ToLower(cell.Text()))
-			if h == "book" || h == "page" {
-				colIdx[h] = i
-			}
-		})
-		bookCol, hasBook := colIdx["book"]
-		pageCol, hasPage := colIdx["page"]
-		if !hasBook || !hasPage {
-			return true // not the sales table — keep searching
-		}
-
-		// The first data row (index 1) is the most recent sale.
-		allRows := tbl.Find("tr")
-		if allRows.Length() < 2 {
-			return false
-		}
-		cells := allRows.Eq(1).Find("td")
-		bookStr := strings.TrimSpace(cells.Eq(bookCol).Text())
-		pageStr := strings.TrimSpace(cells.Eq(pageCol).Text())
-		if bookStr != "" && pageStr != "" {
-			result.book = atoiSafe(bookStr)
-			result.page = atoiSafe(pageStr)
-			result.link = BuildRegistryDeepLink(city, bookStr, pageStr)
-		}
-		return false // stop after first matching table
-	})
-
-	if result.link != "" {
-		log.Printf("[assessor] deed link found pid=%s city=%q book=%d page=%d", pid, city, result.book, result.page)
-	}
-	return result
-}
-
 // ── Second-pass assessor enrichment ─────────────────────────────────────────
 
-// RunAssessorSecondPass fetches VGSI deed Book/Page for rows that still have
-// no registry_book or registry_page — rows that already have both coordinates
-// are skipped entirely (no external HTTP hit).
-// If a row already has an assessor_pid from a previous run, the VGSI address
-// search is skipped and we go directly to the parcel Sales History page.
-// Work is distributed across 3 parallel workers; each successful result is
-// committed immediately so a timeout never discards partial progress.
+// RunAssessorSecondPass fetches the VGSI assessor PID for rows that don't
+// have one yet.  Rows already having assessor_pid are skipped — no HTTP call.
+// Book/Page coordinates come solely from the scraped legal_description parsed
+// in backfillRegistryCoordinates; this pass does not crawl the registry.
+// Work is distributed across 3 parallel workers; each result is committed
+// immediately so a timeout never discards partial progress.
 func RunAssessorSecondPass(ctx context.Context, db *sql.DB) {
 	const numWorkers = 3
 
-	// Count rows that already have both registry coordinates — these are skipped.
 	var alreadyEnriched int
 	db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM auctions
-		WHERE registry_book IS NOT NULL
-		  AND registry_page IS NOT NULL`).Scan(&alreadyEnriched)
+		WHERE assessor_pid IS NOT NULL AND assessor_pid != ''`).Scan(&alreadyEnriched)
 
-	// Only work on rows still missing registry coordinates.
-	// Include the existing assessor_pid so we can skip the VGSI search when
-	// the parcel ID was already found by a previous enrichment run.
 	const sel = `
-		SELECT id, address, city, COALESCE(assessor_pid, '') FROM auctions
-		WHERE (registry_book IS NULL OR registry_page IS NULL)
+		SELECT id, address, city FROM auctions
+		WHERE assessor_pid IS NULL
 		  AND city IS NOT NULL AND city != ''`
 
 	rows, err := db.QueryContext(ctx, sel)
@@ -520,12 +408,11 @@ func RunAssessorSecondPass(ctx context.Context, db *sql.DB) {
 		id      int
 		address string
 		city    string
-		pid     string // non-empty when already fetched in a prior run
 	}
 	var candidates []candidate
 	for rows.Next() {
 		var r candidate
-		if err := rows.Scan(&r.id, &r.address, &r.city, &r.pid); err == nil {
+		if err := rows.Scan(&r.id, &r.address, &r.city); err == nil {
 			if GetVGSIBaseURL(r.city) != "" {
 				candidates = append(candidates, r)
 			}
@@ -533,7 +420,7 @@ func RunAssessorSecondPass(ctx context.Context, db *sql.DB) {
 	}
 	rows.Close()
 
-	log.Printf("[Enrichment] Found %d deals needing research. Skipping %d already enriched. Starting %d parallel workers.",
+	log.Printf("[Enrichment] Found %d assessor lookups needed. Skipping %d already enriched. Starting %d parallel workers.",
 		len(candidates), alreadyEnriched, numWorkers)
 
 	if len(candidates) == 0 {
@@ -563,42 +450,23 @@ func RunAssessorSecondPass(ctx context.Context, db *sql.DB) {
 				default:
 				}
 
-				// Reuse a pid from a prior run to skip the VGSI address search.
-				pid := c.pid
+				pid, err := FetchAssessorPID(ctx, c.address, c.city)
+				if err != nil {
+					log.Printf("[Enrichment] id=%d addr=%q city=%q pid error: %v", c.id, c.address, c.city, err)
+					time.Sleep(time.Second)
+					continue
+				}
 				if pid == "" {
-					var err error
-					pid, err = FetchAssessorPID(ctx, c.address, c.city)
-					if err != nil {
-						log.Printf("[Enrichment] id=%d addr=%q city=%q pid error: %v", c.id, c.address, c.city, err)
-						time.Sleep(time.Second)
-						continue
-					}
-					if pid == "" {
-						time.Sleep(time.Second)
-						continue
-					}
+					time.Sleep(time.Second)
+					continue
 				}
 
-				// Level 1: deed Book/Page integers from the Sales History table.
-				deed := fetchDeedLinkFromParcel(ctx, GetVGSIBaseURL(c.city), pid, c.city)
-
-				// Commit immediately — partial progress is never lost.
-				// Only write registry_book + registry_page (integers); the frontend
-				// builds the full URL from these + the stored registry_url district base.
-				var upErr error
-				if deed.book != 0 && deed.page != 0 {
-					_, upErr = db.ExecContext(ctx,
-						`UPDATE auctions SET assessor_pid=$1, registry_book=$2, registry_page=$3 WHERE id=$4`,
-						pid, deed.book, deed.page, c.id)
-				} else {
-					_, upErr = db.ExecContext(ctx,
-						`UPDATE auctions SET assessor_pid=$1 WHERE id=$2`,
-						pid, c.id)
-				}
+				_, upErr := db.ExecContext(ctx,
+					`UPDATE auctions SET assessor_pid=$1 WHERE id=$2`, pid, c.id)
 				if upErr != nil {
 					log.Printf("[Enrichment] db update id=%d: %v", c.id, upErr)
 				} else {
-					log.Printf("[Enrichment] id=%d pid=%s book=%d page=%d addr=%q", c.id, pid, deed.book, deed.page, c.address)
+					log.Printf("[Enrichment] id=%d pid=%s addr=%q", c.id, pid, c.address)
 					mu.Lock()
 					enriched++
 					mu.Unlock()
