@@ -34,8 +34,7 @@ var upsertAuctionSQL = `
 		 $19, $20, $21, $22, $23)
 	ON CONFLICT ON CONSTRAINT uq_auctions_address_site DO UPDATE
 		SET
-			status            = CASE WHEN auctions.status  IS DISTINCT FROM EXCLUDED.status
-			                         THEN EXCLUDED.status  ELSE auctions.status  END,
+			status            = EXCLUDED.status,
 			date              = COALESCE(EXCLUDED.date, auctions.date),
 			deposit           = CASE WHEN auctions.deposit IS DISTINCT FROM EXCLUDED.deposit
 			                         THEN EXCLUDED.deposit ELSE auctions.deposit END,
@@ -388,6 +387,9 @@ func NormalizeAuction(a sites.Auction) sites.Auction {
 		book, page := ExtractBookPage(a.LegalDescription)
 		a.RegistryBook = atoiSafe(book)
 		a.RegistryPage = atoiSafe(page)
+		if book != "" && page != "" {
+			log.Printf("[book-page] extracted Book=%s Page=%s addr=%q", book, page, a.Street)
+		}
 	}
 
 	a.CitySlug = GenerateSlug(a.City)
@@ -785,16 +787,17 @@ func backfillSlugs(ctx context.Context, db *sql.DB) {
 	log.Printf("[backfill-slugs] populated slugs for %d/%d auctions", fixed, len(toFix))
 }
 
-// backfillRegistryCoordinates parses legal_description for any row that has one
-// but no registry_book/registry_page yet, and writes the integer coordinates.
-// The frontend builds the full deep-link URL on-the-fly from these integers +
-// the district registry_url, so no string URL is stored by this pass.
+// backfillRegistryCoordinates parses legal_description for every row that has
+// a NULL registry_book and writes the book/page integers.  The query is keyed
+// solely on registry_book IS NULL so it surfaces all 232+ legacy rows even
+// when legal_description was never populated (those are skipped in Go).
+// The previous query required legal_description IS NOT NULL, which silently
+// returned 0 rows whenever the legal text was missing, hiding the gap.
 func backfillRegistryCoordinates(ctx context.Context, db *sql.DB) {
 	const sel = `
-		SELECT id, legal_description FROM auctions
-		WHERE legal_description IS NOT NULL
-		  AND legal_description != ''
-		  AND (registry_book IS NULL OR registry_page IS NULL)`
+		SELECT id, site_name, legal_description
+		FROM   auctions
+		WHERE  registry_book IS NULL`
 
 	rows, err := db.QueryContext(ctx, sel)
 	if err != nil {
@@ -803,35 +806,45 @@ func backfillRegistryCoordinates(ctx context.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
-	type row struct {
-		id    int
-		legal string
+	type candidate struct {
+		id       int
+		siteName string
+		legal    sql.NullString
 	}
-	var toFix []row
+	var candidates []candidate
 	for rows.Next() {
-		var r row
-		if err := rows.Scan(&r.id, &r.legal); err == nil {
-			toFix = append(toFix, r)
+		var c candidate
+		if err := rows.Scan(&c.id, &c.siteName, &c.legal); err == nil {
+			candidates = append(candidates, c)
 		}
 	}
 	rows.Close()
 
-	fixed := 0
-	for _, r := range toFix {
-		book, page := ExtractBookPage(r.legal)
+	log.Printf("[backfill-coords] found %d rows with NULL registry_book", len(candidates))
+
+	fixed, skipped := 0, 0
+	for _, c := range candidates {
+		if !c.legal.Valid || c.legal.String == "" {
+			skipped++
+			continue
+		}
+		book, page := ExtractBookPage(c.legal.String)
 		if book == "" || page == "" {
+			skipped++
 			continue
 		}
 		_, err := db.ExecContext(ctx,
 			`UPDATE auctions SET registry_book=$1, registry_page=$2 WHERE id=$3`,
-			nullIfZero(atoiSafe(book)), nullIfZero(atoiSafe(page)), r.id)
+			nullIfZero(atoiSafe(book)), nullIfZero(atoiSafe(page)), c.id)
 		if err != nil {
-			log.Printf("[backfill-coords] update id=%d: %v", r.id, err)
+			log.Printf("[backfill-coords] update error id=%d: %v", c.id, err)
 		} else {
+			log.Printf("[backfill] found match in id=%d (%s): Book %s, Page %s", c.id, c.siteName, book, page)
 			fixed++
 		}
 	}
-	log.Printf("[backfill-coords] populated coordinates for %d/%d auctions", fixed, len(toFix))
+	log.Printf("[backfill-coords] complete: updated %d/%d rows (%d skipped — no legal text or no match)",
+		fixed, len(candidates), skipped)
 }
 
 // scraperDef pairs a canonical site name with a context-aware scraper function.
@@ -993,8 +1006,7 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 	purgePastAuctions(ctx, db)
 	backfillMissingURLs(ctx, db)
 	backfillSlugs(ctx, db)
-	// NOTE: backfillRegistryCoordinates and RunAssessorSecondPass run in the
-	// enrichment phase AFTER all 12 scrapers have committed their data.
+	// NOTE: backfillRegistryCoordinates runs synchronously at the end of Pass 1.
 
 	// Build a deposit cache for Patriot so detail page crawls are skipped for
 	// properties whose deposit is already stored.  This saves one CF Browser
@@ -1122,20 +1134,9 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 
 	log.Printf("[scraper] Pass 1 complete — all addresses and statuses committed to database")
 
-	// ── Enrichment phase ────────────────────────────────────────────────────────
-	// Uses a FRESH context derived from Background(), NOT from the caller's ctx.
-	// This means the enrichment is never killed by the scrape deadline — even if
-	// the dryrun or HTTP handler's 60-minute timer fires, enrichment continues
-	// independently.  Row-by-row commits mean any partial run is preserved.
-	enrichCtx, enrichCancel := context.WithTimeout(context.Background(), 60*time.Minute)
-	defer enrichCancel()
-
-	// Level 2 (mortgage): parse registry_book/registry_page from legal_description.
-	// Fast — pure DB read + string math, no external HTTP.
-	backfillRegistryCoordinates(enrichCtx, db)
-
-	// Level 1 (deed) + assessor PID: hit VGSI portals for rows still missing data.
-	RunAssessorSecondPass(enrichCtx, db)
+	// Backfill: NormalizeAuction extracts book/page inline for every new row.
+	// This pass also catches existing DB rows that pre-date book/page extraction.
+	backfillRegistryCoordinates(ctx, db)
 
 	log.Printf("[scraper] run complete")
 }

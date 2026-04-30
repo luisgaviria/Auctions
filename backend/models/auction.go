@@ -27,7 +27,7 @@ type AuctionModel struct {
 	ZillowURL        sql.NullString `json:"-"` // nullable; unwrapped in ToJSON()
 	StreetViewURL    sql.NullString `json:"-"` // nullable; unwrapped in ToJSON()
 	RegistryURL      sql.NullString `json:"-"` // nullable; unwrapped in ToJSON()
-	AssessorPID      sql.NullString `json:"-"` // VGSI parcel ID; set by second-pass scraper
+	AssessorPID      sql.NullString `json:"-"` // legacy column; retained for schema compatibility
 	RegistryDeepLink sql.NullString `json:"-"` // masslandrecords.com book/page deep link
 	RegistryBook     sql.NullInt64  `json:"-"` // numeric book number for dynamic URL building
 	RegistryPage     sql.NullInt64  `json:"-"` // numeric page number for dynamic URL building
@@ -70,7 +70,7 @@ type AuctionReport struct {
 	Checklist    []DueDiligenceItem `json:"checklist"`
 	ShareURL     string             `json:"share_url"`
 	AddressSlug  string             `json:"address_slug"`
-	AssessorURL  string             `json:"assessor_url,omitempty"` // full VGSI parcel URL
+	AssessorURL  string             `json:"assessor_url,omitempty"`
 }
 
 // ToJSON converts a scanned AuctionModel into an API-safe AuctionJSON.

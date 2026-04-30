@@ -399,9 +399,6 @@ func (s *AuctionsService) GetAuctionReport(addressSlug string) ([]byte, int, err
 		}
 	}
 
-	// Build full VGSI assessor URL from the stored PID, if available.
-	assessorURL := utils.BuildAssessorURL(auctionJSON.City, auctionJSON.AssessorPID)
-
 	checklist := buildChecklist(auctionJSON)
 	shareURL := "https://auctionandcompany.com/report/" + addressSlug
 
@@ -410,7 +407,6 @@ func (s *AuctionsService) GetAuctionReport(addressSlug string) ([]byte, int, err
 		Checklist:   checklist,
 		ShareURL:    shareURL,
 		AddressSlug: scannedSlug,
-		AssessorURL: assessorURL,
 	}
 
 	data, err := json.Marshal(report)

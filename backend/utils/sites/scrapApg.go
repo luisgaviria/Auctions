@@ -41,18 +41,19 @@ func ScrapApg() []Auction {
 				return
 			}
 
-			var status, street, date, deposit string
+			var status, street, date, deposit, legalDesc string
 			switch {
 			case len(ddTexts) >= 5:
 				// [0]=AuctionStatus [1]=PropertyStatus [2]=Address [3]=Desc [4]=Deposit
-				// Date may appear as an additional field — look for it explicitly via dt labels.
 				status = ddTexts[1]
 				street = strings.ReplaceAll(ddTexts[2], ".,", ",")
+				legalDesc = strings.TrimSpace(ddTexts[3])
 				deposit = ddTexts[len(ddTexts)-1]
 			default:
 				// [0]=AuctionStatus [1]=Address [2]=Desc [3]=Deposit
 				status = auctionStatus
 				street = strings.ReplaceAll(ddTexts[1], ".,", ",")
+				legalDesc = strings.TrimSpace(ddTexts[2])
 				deposit = ddTexts[len(ddTexts)-1]
 			}
 
@@ -72,12 +73,13 @@ func ScrapApg() []Auction {
 			}
 
 			auctions = append(auctions, Auction{
-				Status:  status,
-				Street:  street,
-				Date:    date,
-				Deposit: deposit,
-				Url:     url,
-				Logo:    logo,
+				Status:           status,
+				Street:           street,
+				Date:             date,
+				Deposit:          deposit,
+				Url:              url,
+				Logo:             logo,
+				LegalDescription: legalDesc,
 			})
 		})
 	})

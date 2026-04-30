@@ -30,12 +30,14 @@ type cfWaitForSelector struct {
 }
 
 type cfCrawlRequest struct {
-	URL             string              `json:"url"`
-	Formats         []string            `json:"formats"`               // ["html"]
-	Depth           int                 `json:"depth"`                 // 0 = target URL only, no link following
-	GotoOptions     *cfGotoOptions      `json:"gotoOptions,omitempty"` // navigation options
-	WaitForSelector *cfWaitForSelector  `json:"waitForSelector,omitempty"` // block until selector appears in DOM
-	Wait            int                 `json:"wait,omitempty"`        // ms to pause after page load before returning HTML
+	URL             string             `json:"url"`
+	Formats         []string           `json:"formats"`                   // ["html"]
+	Depth           int                `json:"depth"`                     // 0 = target URL only, no link following
+	GotoOptions     *cfGotoOptions     `json:"gotoOptions,omitempty"`     // navigation options
+	WaitForSelector *cfWaitForSelector `json:"waitForSelector,omitempty"` // block until selector appears in DOM
+	Wait            int                `json:"wait,omitempty"`            // ms to pause after page load before returning HTML
+	BlockAds        bool               `json:"block_ads,omitempty"`       // skip ad network requests
+	BlockImages     bool               `json:"block_images,omitempty"`    // skip image downloads
 }
 
 type cfGotoOptions struct {
@@ -92,7 +94,7 @@ type cfJobResponse struct {
 //
 // Reads CF_ACCOUNT_ID and CF_API_TOKEN from the environment.
 func CFetch(ctx context.Context, targetURL string) (string, error) {
-	return cfetch(ctx, targetURL, "", 0)
+	return cfetch(ctx, targetURL, "", 0, false)
 }
 
 // CFetchSlow is like CFetch but instructs Cloudflare to wait an additional
@@ -100,10 +102,17 @@ func CFetch(ctx context.Context, targetURL string) (string, error) {
 // to block until waitForSelector appears in the DOM (if non-empty).
 // Use this for pages where JS renders critical content after networkidle0.
 func CFetchSlow(ctx context.Context, targetURL, waitForSelector string, waitMs int) (string, error) {
-	return cfetch(ctx, targetURL, waitForSelector, waitMs)
+	return cfetch(ctx, targetURL, waitForSelector, waitMs, false)
 }
 
-func cfetch(ctx context.Context, targetURL, waitForSelector string, waitMs int) (string, error) {
+// CFetchFast requests domcontentloaded (instead of networkidle0) and asks the
+// worker to block ads and images.  Use for pages whose critical content is
+// present in the initial HTML response so we can skip the network-idle wait.
+func CFetchFast(ctx context.Context, targetURL string) (string, error) {
+	return cfetch(ctx, targetURL, "", 0, true)
+}
+
+func cfetch(ctx context.Context, targetURL, waitForSelector string, waitMs int, fast bool) (string, error) {
 	accountID := os.Getenv("CF_ACCOUNT_ID")
 	token := os.Getenv("CF_API_TOKEN")
 	if accountID == "" || token == "" {
@@ -114,14 +123,20 @@ func cfetch(ctx context.Context, targetURL, waitForSelector string, waitMs int) 
 	if waitForSelector != "" {
 		wfs = &cfWaitForSelector{Selector: waitForSelector}
 	}
+	waitUntil := "networkidle0"
+	if fast {
+		waitUntil = "domcontentloaded"
+	}
 	payload := cfCrawlRequest{
 		URL:             targetURL,
 		Formats:         []string{"html"},
 		Depth:           1,
 		WaitForSelector: wfs,
 		Wait:            waitMs,
+		BlockAds:        fast,
+		BlockImages:     fast,
 		GotoOptions: &cfGotoOptions{
-			WaitUntil: "networkidle0",
+			WaitUntil: waitUntil,
 		},
 	}
 	body, err := json.Marshal(payload)

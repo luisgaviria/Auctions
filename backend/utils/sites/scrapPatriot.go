@@ -3,7 +3,9 @@ package sites
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -14,6 +16,11 @@ import (
 
 const patriotBase = "https://patriotauctioneers.com"
 const patriotLogo = "/patriot.webp"
+
+// patriotForceDetailFetch bypasses the deposit cache so every detail page is
+// visited fresh.  Set to true for a one-time run to populate legal_description
+// for all Patriot rows; flip back to false once the column is fully populated.
+const patriotForceDetailFetch = true
 
 // ScrapPatriot fetches the Patriot Auctioneers listing page and all detail
 // pages.  It is a thin wrapper around ScrapPatriotWithCache with no cache.
@@ -72,12 +79,20 @@ func ScrapPatriotWithCache(ctx context.Context, knownDeposits map[string]string)
 		items = append(items, listItem{rawAddress, formattedDate, formattedTime, fullHref, listStatus})
 	})
 
-	// ── Pass 2: fetch detail pages via 3-worker pool ─────────────────────────
+	// ── Pass 2: fetch detail pages via 10-worker pool ────────────────────────
 	type detailResult struct {
 		deposit string
 		status  string
+		legal   string // raw text containing Book/Page citation
 	}
 	details := make([]detailResult, len(items))
+
+	type urlResult struct {
+		deposit string
+		legal   string
+	}
+	var dedupMu sync.Mutex
+	urlCache := make(map[string]*urlResult) // URL → completed result (nil = in-flight)
 
 	type workUnit struct{ idx int }
 	work := make(chan workUnit, len(items))
@@ -86,7 +101,7 @@ func ScrapPatriotWithCache(ctx context.Context, knownDeposits map[string]string)
 	}
 	close(work)
 
-	const numWorkers = 3
+	const numWorkers = 10
 	var wg sync.WaitGroup
 	for w := 0; w < numWorkers; w++ {
 		wg.Add(1)
@@ -94,13 +109,43 @@ func ScrapPatriotWithCache(ctx context.Context, knownDeposits map[string]string)
 			defer wg.Done()
 			for wu := range work {
 				item := items[wu.idx]
-				if cached, ok := knownDeposits[item.fullHref]; ok && cached != "" {
-					log.Printf("[patriot] deposit cached — skipping detail fetch url=%q", item.fullHref)
-					details[wu.idx] = detailResult{cached, item.listStatus}
-				} else {
-					deposit, status := patriotDetail(ctx, item.fullHref)
-					details[wu.idx] = detailResult{deposit, status}
+				// Normalise the URL: strip a trailing slash so that DB links
+				// stored with or without it both match.
+				normURL := strings.TrimRight(item.fullHref, "/")
+
+				// 1. Supabase deposit cache — skipped when patriotForceDetailFetch
+				//    is true so legal_description is populated on every property.
+				if !patriotForceDetailFetch {
+					if cached, ok := knownDeposits[normURL]; ok && cached != "" {
+						log.Printf("[patriot] deposit cached — skipping detail fetch url=%q", normURL)
+						details[wu.idx] = detailResult{cached, item.listStatus, ""}
+						continue
+					}
+					if cached, ok := knownDeposits[normURL+"/"]; ok && cached != "" {
+						log.Printf("[patriot] deposit cached (slash) — skipping detail fetch url=%q", normURL)
+						details[wu.idx] = detailResult{cached, item.listStatus, ""}
+						continue
+					}
 				}
+
+				// 2. Deduplicate concurrent fetches for the same URL.
+				dedupMu.Lock()
+				if res, seen := urlCache[normURL]; seen && res != nil {
+					dedupMu.Unlock()
+					details[wu.idx] = detailResult{res.deposit, item.listStatus, res.legal}
+					continue
+				}
+				urlCache[normURL] = nil
+				dedupMu.Unlock()
+
+				deposit, legal := patriotDetail(ctx, item.fullHref)
+				// Status always comes from the list page — never from the detail
+				// page CSS selector, which can be stale or missing.
+				details[wu.idx] = detailResult{deposit, item.listStatus, legal}
+
+				dedupMu.Lock()
+				urlCache[normURL] = &urlResult{deposit, legal}
+				dedupMu.Unlock()
 			}
 		}()
 	}
@@ -122,35 +167,88 @@ func ScrapPatriotWithCache(ctx context.Context, knownDeposits map[string]string)
 			}
 		}
 		auctions = append(auctions, Auction{
-			SiteName: "patriot",
-			Logo:     patriotLogo,
-			Street:   street,
-			City:     city,
-			Url:      item.fullHref,
-			Date:     item.formattedDate,
-			Time:     item.formattedTime,
-			Deposit:  details[i].deposit,
-			Status:   details[i].status,
+			SiteName:         "patriot",
+			Logo:             patriotLogo,
+			Street:           street,
+			City:             city,
+			Url:              item.fullHref,
+			Date:             item.formattedDate,
+			Time:             item.formattedTime,
+			Deposit:          details[i].deposit,
+			Status:           details[i].status,
+			LegalDescription: details[i].legal,
 		})
 	}
 
 	return auctions, nil
 }
 
+// patriotDetailHTTPClient is a shared client for the plain-HTTP fast path.
+var patriotHTTPClient = &http.Client{Timeout: 10 * time.Second}
+
 // patriotDetail fetches a single Patriot auction detail page and returns the
 // deposit string and status text. On any failure, safe defaults are returned
 // so the listing is still recorded with partial data.
-func patriotDetail(ctx context.Context, url string) (deposit, status string) {
-	// Use CFetchSlow: block until .auction-box appears in the DOM, giving
-	// JS-rendered terms time to paint before we grab the HTML.
-	html, err := CFetchSlow(ctx, url, ".auction-box", 0)
-	if err != nil {
-		return "", "On Schedule"
+//
+// Fast path: plain HTTP GET with a desktop User-Agent. Patriot serves its
+// auction terms in the initial HTML, so no JS execution is needed most of the
+// time. Only falls back to CFetchFast (domcontentloaded + block_ads +
+// block_images) when the plain GET misses the deposit.
+func patriotDetail(ctx context.Context, url string) (deposit, legal string) {
+	if html, ok := patriotDetailPlainHTTP(ctx, url); ok {
+		log.Printf("[patriot] plain-HTTP hit html_bytes=%d url=%q", len(html), url)
+		if dep, leg := patriotParseDetail(html, url); dep != "" {
+			return dep, leg
+		}
+		log.Printf("[patriot] plain-HTTP deposit empty — falling back to CFetchFast url=%q", url)
 	}
+
+	html, err := CFetchFast(ctx, url)
+	if err != nil {
+		return "", ""
+	}
+	log.Printf("[patriot] CFetchFast html_bytes=%d url=%q", len(html), url)
+	return patriotParseDetail(html, url)
+}
+
+// patriotDetailPlainHTTP performs a plain HTTP GET with a desktop User-Agent.
+// Returns (html, true) on a 200 OK, ("", false) on any error or non-200.
+func patriotDetailPlainHTTP(ctx context.Context, url string) (string, bool) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", false
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+
+	resp, err := patriotHTTPClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if err != nil {
+			log.Printf("[patriot] plain-HTTP error url=%q err=%v", url, err)
+		} else {
+			log.Printf("[patriot] plain-HTTP status=%d url=%q — falling back", resp.StatusCode, url)
+			resp.Body.Close()
+		}
+		return "", false
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", false
+	}
+	return string(body), true
+}
+
+// patriotLegalRe detects paragraphs containing a Book/Page registry citation.
+var patriotLegalRe = regexp.MustCompile(`(?i)(?:book|bk)\s*\.?\s*\d+`)
+
+// patriotParseDetail extracts deposit and legal description from a Patriot detail page HTML.
+func patriotParseDetail(html, url string) (deposit, legal string) {
 	log.Printf("[patriot] detail html_bytes=%d url=%q", len(html), url)
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
-		return "", "On Schedule"
+		return "", ""
 	}
 
 	// cleanText normalises whitespace: replaces non-breaking spaces (\xA0)
@@ -190,6 +288,10 @@ func patriotDetail(ctx context.Context, url string) (deposit, status string) {
 			if deposit != "" {
 				log.Printf("[patriot]   → matched deposit=%q at p[%d]", deposit, i)
 			}
+		}
+		if legal == "" && patriotLegalRe.MatchString(text) {
+			legal = text
+			log.Printf("[patriot]   → matched legal=%q at p[%d]", legal, i)
 		}
 	})
 
@@ -245,16 +347,8 @@ func patriotDetail(ctx context.Context, url string) (deposit, status string) {
 		}
 	}
 
-	log.Printf("[patriot] final deposit=%q url=%q", deposit, url)
-
-	status = strings.TrimSpace(doc.Find(
-		"#calendar > div:nth-child(2) > div > div.col-md-4 > div:nth-child(1) > p > span.text-red > strong",
-	).Text())
-	if status == "" {
-		status = "On Schedule"
-	}
-
-	return deposit, status
+	log.Printf("[patriot] final deposit=%q legal=%q url=%q", deposit, legal, url)
+	return deposit, legal
 }
 
 // parseDateAndTimePatriot parses "Monday Mar 10 @ 11:00 am" into

@@ -1,6 +1,8 @@
 package sites
 
 import (
+	"io"
+	"log"
 	"net/http"
 	"regexp"
 	"strings"
@@ -8,6 +10,40 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 )
+
+var sullivanBookPageRe = regexp.MustCompile(`(?i)(?:book|bk)\s*\.?\s*\d+`)
+
+var sullivanHTTPClient = &http.Client{Timeout: 10 * time.Second}
+
+func fetchSullivanLegal(url string) string {
+	resp, err := sullivanHTTPClient.Get(url)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return ""
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ""
+	}
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(body)))
+	if err != nil {
+		return ""
+	}
+	var legal string
+	doc.Find("p").EachWithBreak(func(_ int, p *goquery.Selection) bool {
+		text := strings.TrimSpace(p.Text())
+		if sullivanBookPageRe.MatchString(text) {
+			legal = text
+			log.Printf("[sullivan] legal=%q url=%q", legal, url)
+			return false
+		}
+		return true
+	})
+	return legal
+}
 
 func ScrapSullivan() []Auction {
 	siteUrl := "https://sullivan-auctioneers.com/massachusetts/"
@@ -52,9 +88,12 @@ func ScrapSullivan() []Auction {
 			auction.Url = siteUrl + strings.TrimSpace(url)
 		}
 
-		auction.Deposit = "$5,000" // deposit set to default 5,000$
-
+		auction.Deposit = "$5,000"
 		auction.Logo = "/sullivan.webp"
+
+		if auction.Url != "" {
+			auction.LegalDescription = fetchSullivanLegal(auction.Url)
+		}
 
 		auctions = append(auctions, auction)
 	})

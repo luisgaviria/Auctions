@@ -2,11 +2,15 @@ package sites
 
 import (
 	"log"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/gocolly/colly"
 )
+
+// jakeBookPageRe matches Book/Page registry citations in Jake's TERMS text.
+var jakeBookPageRe = regexp.MustCompile(`(?i)(?:book|bk)\s*\.?\s*\d+`)
 
 func ScrapJake() []Auction {
 	url := "https://www.jkauctioneers.com/list1.htm"
@@ -34,6 +38,17 @@ func ScrapJake() []Auction {
 			termsText := strings.Split(e2.Text, "TERMS")[1]
 			price := strings.Split(termsText, "Dollars")[0]
 			deposit := strings.Split(strings.TrimSpace(strings.Split(price, "(")[1]), ")")[0]
+
+			var legalDesc string
+			for _, line := range strings.Split(termsText, "\n") {
+				line = strings.TrimSpace(line)
+				if jakeBookPageRe.MatchString(line) {
+					legalDesc = line
+					log.Printf("[jake] legal=%q url=%q", legalDesc, href)
+					break
+				}
+			}
+
 			dateParsed, err := time.Parse("Monday, January 2, 2006", strings.TrimSpace(strings.Split(date, "AT")[0]))
 			if err != nil {
 				dateParsed, err = time.Parse("Monday January 2, 2006", strings.TrimSpace(strings.Split(date, "AT")[0]))
@@ -44,14 +59,15 @@ func ScrapJake() []Auction {
 			}
 
 			data = append(data, Auction{
-				Date:    dateParsed.Format("01/02/2006"),
-				Time:    "", // Time is not parsed in the original code
-				Street:  address,
-				City:    "", // City is not parsed in the original code
-				Deposit: deposit,
-				Status:  status,
-				Logo:    logo,
-				Url:     href,
+				Date:             dateParsed.Format("01/02/2006"),
+				Time:             "",
+				Street:           address,
+				City:             "",
+				Deposit:          deposit,
+				Status:           status,
+				Logo:             logo,
+				Url:              href,
+				LegalDescription: legalDesc,
 			})
 		})
 		c2.Visit(href)
