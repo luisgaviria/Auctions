@@ -160,7 +160,7 @@ const displayStatus = status || 'On Schedule';
     )}
     {registryUrl && (
       hasRegistryCoords ? (
-        <form method="POST" action={registryFormAction} target="_blank" rel="noopener"
+        <form method="POST" action={registryFormAction} target="_blank"
               style="display:contents">
           <input type="hidden" name="SearchFormEx1$ACSTextBox_Book" value={String(registryBook)} />
           <input type="hidden" name="SearchFormEx1$ACSTextBox_PageNumber" value={String(registryPage)} />

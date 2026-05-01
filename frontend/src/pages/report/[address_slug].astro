@@ -140,7 +140,7 @@ const registryFormAction = auction.registry_url ? `${auction.registry_url}/Defau
           </a>
 
           {registryHasCoords ? (
-            <form method="POST" action={registryFormAction} target="_blank" rel="noopener"
+            <form method="POST" action={registryFormAction} target="_blank"
                   style="display:contents">
               <input type="hidden" name="SearchFormEx1$ACSTextBox_Book"
                      value={String(auction.registry_book)} />
