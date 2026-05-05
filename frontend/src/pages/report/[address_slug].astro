@@ -72,8 +72,9 @@ for (const item of checklist) {
   grouped[item.category].push(item);
 }
 
-const registryHasCoords = Boolean(auction.registry_book && auction.registry_page && auction.registry_url);
-const registryFormAction = auction.registry_url ? `${auction.registry_url}/Default.aspx` : '#';
+const effectiveRegistryUrl = (auction.registry_book && auction.registry_page && auction.registry_url)
+  ? `${auction.registry_url}/Default.aspx?p=BookSearch&b=${auction.registry_book}&pg=${auction.registry_page}`
+  : (auction.registry_url ?? '');
 ---
 
 <Layout title={pageTitle} description={description} canonical={`${Astro.url.origin}/report/${address_slug}`}>
@@ -139,36 +140,15 @@ const registryFormAction = auction.registry_url ? `${auction.registry_url}/Defau
             </svg>
           </a>
 
-          {registryHasCoords ? (
-            <form method="POST" action={registryFormAction} target="_blank"
-                  style="display:contents">
-              <input type="hidden" name="SearchFormEx1$ACSTextBox_Book"
-                     value={String(auction.registry_book)} />
-              <input type="hidden" name="SearchFormEx1$ACSTextBox_PageNumber"
-                     value={String(auction.registry_page)} />
-              <input type="hidden" name="SearchFormEx1$btnSearch" value="Search" />
-              <input type="hidden" name="__EVENTTARGET" value="" />
-              <input type="hidden" name="__EVENTARGUMENT" value="" />
-              <button type="submit" class="action-card action-card--deep action-card--form-btn">
-                <span class="action-icon">📜</span>
-                <div class="action-body">
-                  <span class="action-label">Registry of Deeds</span>
-                  <span class="action-desc">Direct book/page search</span>
-                </div>
-                <span class="deep-badge">Book/Page</span>
-                <svg class="action-arrow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                  <path fill-rule="evenodd" d="M5.22 14.78a.75.75 0 001.06 0l7.5-7.5a.75.75 0 00-1.06-1.06L5.22 13.72a.75.75 0 000 1.06z" clip-rule="evenodd"/>
-                  <path fill-rule="evenodd" d="M6.28 6.22a.75.75 0 00-1.06 1.06l7.5 7.5a.75.75 0 001.06-1.06l-7.5-7.5z" clip-rule="evenodd"/>
-                </svg>
-              </button>
-            </form>
-          ) : (
-            <a href={auction.registry_url || '#'} target="_blank" rel="noopener" class="action-card">
+          {effectiveRegistryUrl && (
+            <a href={effectiveRegistryUrl} target="_blank" rel="noopener noreferrer"
+               class={`action-card${auction.registry_book ? ' action-card--deep' : ''}`}>
               <span class="action-icon">📜</span>
               <div class="action-body">
                 <span class="action-label">Registry of Deeds</span>
-                <span class="action-desc">County deeds portal</span>
+                <span class="action-desc">{auction.registry_book ? 'Direct book/page search' : 'County deeds portal'}</span>
               </div>
+              {auction.registry_book && <span class="deep-badge">Book/Page</span>}
               <svg class="action-arrow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fill-rule="evenodd" d="M5.22 14.78a.75.75 0 001.06 0l7.5-7.5a.75.75 0 00-1.06-1.06L5.22 13.72a.75.75 0 000 1.06z" clip-rule="evenodd"/>
                 <path fill-rule="evenodd" d="M6.28 6.22a.75.75 0 00-1.06 1.06l7.5 7.5a.75.75 0 001.06-1.06l-7.5-7.5z" clip-rule="evenodd"/>

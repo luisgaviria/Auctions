@@ -22,8 +22,9 @@ interface Props {
 const { id, link, date, time: auctionTime, address, city, state, status, deposit, siteName, logo, zillowUrl, streetViewUrl, registryUrl, registryBook, registryPage, nearbyLandmarks } =
   Astro.props;
 
-const registryFormAction = registryUrl ? `${registryUrl}/Default.aspx` : '';
-const hasRegistryCoords = Boolean(registryBook && registryPage && registryFormAction);
+const effectiveRegistryUrl = (registryBook && registryPage && registryUrl)
+  ? `${registryUrl}/Default.aspx?p=BookSearch&b=${registryBook}&pg=${registryPage}`
+  : (registryUrl ?? '');
 
 function toISODate(str: string): string {
   if (!str) return '';
@@ -158,29 +159,14 @@ const displayStatus = status || 'On Schedule';
         <span>Maps</span>
       </button>
     )}
-    {registryUrl && (
-      hasRegistryCoords ? (
-        <form method="POST" action={registryFormAction} target="_blank"
-              style="display:contents">
-          <input type="hidden" name="SearchFormEx1$ACSTextBox_Book" value={String(registryBook)} />
-          <input type="hidden" name="SearchFormEx1$ACSTextBox_PageNumber" value={String(registryPage)} />
-          <input type="hidden" name="SearchFormEx1$btnSearch" value="Search" />
-          <input type="hidden" name="__EVENTTARGET" value="" />
-          <input type="hidden" name="__EVENTARGUMENT" value="" />
-          <button type="submit" class="research-btn research-btn--registry"
-                  title="Search Registry of Deeds" aria-label="Search Registry of Deeds">
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15h8v2H8zm0-4h8v2H8z"/></svg>
-            <span>Registry</span>
-          </button>
-        </form>
-      ) : (
-        <a href={registryUrl} target="_blank" rel="noopener noreferrer"
-           class="research-btn research-btn--registry"
-           title="View Registry of Deeds" aria-label="View Registry of Deeds">
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15h8v2H8zm0-4h8v2H8z"/></svg>
-          <span>Registry</span>
-        </a>
-      )
+    {effectiveRegistryUrl && (
+      <a href={effectiveRegistryUrl} target="_blank" rel="noopener noreferrer"
+         class="research-btn research-btn--registry"
+         title={registryBook ? 'Search Registry of Deeds by Book/Page' : 'View Registry of Deeds'}
+         aria-label="Search Registry of Deeds">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15h8v2H8zm0-4h8v2H8z"/></svg>
+        <span>Registry</span>
+      </a>
     )}
   </div>
 
