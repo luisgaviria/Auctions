@@ -37,9 +37,18 @@ func ScrapPatriot(ctx context.Context) ([]Auction, error) {
 // Detail fetches are dispatched to a pool of 3 parallel workers so multiple
 // Cloudflare calls proceed concurrently instead of sequentially.
 func ScrapPatriotWithCache(ctx context.Context, knownDeposits map[string]string) ([]Auction, error) {
-	html, err := CFetch(ctx, patriotBase+"/auctions-in-massachusetts/")
-	if err != nil {
-		return nil, fmt.Errorf("patriot: list page: %w", err)
+	listURL := patriotBase + "/auctions-in-massachusetts/"
+	var html string
+	if body, ok := patriotDetailPlainHTTP(ctx, listURL); ok {
+		log.Printf("[patriot] list page plain-HTTP hit bytes=%d", len(body))
+		html = body
+	} else {
+		log.Printf("[patriot] list page plain-HTTP failed — falling back to CFetch")
+		var err error
+		html, err = CFetch(ctx, listURL)
+		if err != nil {
+			return nil, fmt.Errorf("patriot: list page: %w", err)
+		}
 	}
 
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
