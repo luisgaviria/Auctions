@@ -73,7 +73,7 @@ for (const item of checklist) {
 }
 
 const effectiveRegistryUrl = (auction.registry_book && auction.registry_page && auction.registry_url)
-  ? `${auction.registry_url}/Default.aspx?p=BookSearch&b=${auction.registry_book}&pg=${auction.registry_page}`
+  ? `${auction.registry_url}/#page=searchEntry&searchtype=Standard&recordtype=MR&book=${auction.registry_book}&bookpage=${auction.registry_page}`
   : (auction.registry_url ?? '');
 ---
 

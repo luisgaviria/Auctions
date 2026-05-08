@@ -9,6 +9,13 @@ import (
 	"github.com/gocolly/colly/v2"
 )
 
+// deanBrRe matches HTML <br> variants so the address cell can be split into
+// street+city (before the break) and legal description (after the break).
+var deanBrRe = regexp.MustCompile(`(?i)<br\s*/?>`)
+
+// deanTagRe strips any remaining HTML tags from a cell fragment.
+var deanTagRe = regexp.MustCompile(`<[^>]+>`)
+
 // deanWeekdayRe strips a leading day-of-week prefix that Dean Associates
 // prepends to date strings, e.g. "WEDNESDAY, AUGUST 13, 2025, 3:00 PM".
 var deanWeekdayRe = regexp.MustCompile(`(?i)^(?:MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY),?\s*`)
@@ -102,24 +109,26 @@ func ScrapDean() []Auction {
 						auction.Time = strings.TrimSpace(m[2])
 
 					case 2:
-						raw := strings.TrimSpace(td.Text)
-						// The address cell contains two lines:
-						//   Line 1: street address ("90 SUFFOLK ROAD, NEWTON, MA")
-						//   Line 2: mortgage registry citation ("Book 45231, Page 112")
-						// Capture line 2 as LegalDescription before dropping it.
-						if idx := strings.IndexByte(raw, '\n'); idx != -1 {
-							legalLine := strings.TrimSpace(raw[idx+1:])
-							if legalLine != "" {
-								auction.LegalDescription = legalLine
-							}
-							raw = strings.TrimSpace(raw[:idx])
+						// Colly normalises <br> to spaces in .Text, so use the
+						// raw inner HTML and split on the <br> tag instead.
+						innerHTML, _ := td.DOM.Html()
+						brParts := deanBrRe.Split(innerHTML, 2)
+						addrHTML := strings.TrimSpace(brParts[0])
+						var legalLine string
+						if len(brParts) > 1 {
+							legalLine = strings.TrimSpace(deanTagRe.ReplaceAllString(brParts[1], ""))
+							legalLine = strings.TrimSpace(strings.ReplaceAll(legalLine, " ", " "))
+						}
+						raw := strings.TrimSpace(deanTagRe.ReplaceAllString(addrHTML, ""))
+						if legalLine != "" {
+							auction.LegalDescription = legalLine
 						}
 						auction.Street = raw
 						// Extract city from "STREET, CITY, MA[...]".
 						// Second-to-last comma-separated segment is the town name.
-						parts := strings.Split(raw, ",")
-						if len(parts) >= 3 {
-							city := strings.TrimSpace(parts[len(parts)-2])
+						addrParts := strings.Split(raw, ",")
+						if len(addrParts) >= 3 {
+							city := strings.TrimSpace(addrParts[len(addrParts)-2])
 							if city != "" {
 								auction.City = city + ", Massachusetts"
 							}

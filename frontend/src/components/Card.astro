@@ -23,7 +23,7 @@ const { id, link, date, time: auctionTime, address, city, state, status, deposit
   Astro.props;
 
 const effectiveRegistryUrl = (registryBook && registryPage && registryUrl)
-  ? `${registryUrl}/Default.aspx?p=BookSearch&b=${registryBook}&pg=${registryPage}`
+  ? `${registryUrl}/#page=searchEntry&searchtype=Standard&recordtype=MR&book=${registryBook}&bookpage=${registryPage}`
   : (registryUrl ?? '');
 
 function toISODate(str: string): string {

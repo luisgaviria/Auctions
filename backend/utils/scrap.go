@@ -34,6 +34,7 @@ var upsertAuctionSQL = `
 		 $19, $20, $21, $22, $23)
 	ON CONFLICT ON CONSTRAINT uq_auctions_address_site DO UPDATE
 		SET
+			city              = EXCLUDED.city,
 			status            = EXCLUDED.status,
 			date              = COALESCE(EXCLUDED.date, auctions.date),
 			deposit           = CASE WHEN auctions.deposit IS DISTINCT FROM EXCLUDED.deposit
