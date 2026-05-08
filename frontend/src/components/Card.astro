@@ -22,9 +22,7 @@ interface Props {
 const { id, link, date, time: auctionTime, address, city, state, status, deposit, siteName, logo, zillowUrl, streetViewUrl, registryUrl, registryBook, registryPage, nearbyLandmarks } =
   Astro.props;
 
-const effectiveRegistryUrl = (registryBook && registryPage && registryUrl)
-  ? `${registryUrl}/#page=searchEntry&searchtype=Standard&recordtype=MR&book=${registryBook}&bookpage=${registryPage}`
-  : (registryUrl ?? '');
+const effectiveRegistryUrl = registryUrl ?? '';
 
 function toISODate(str: string): string {
   if (!str) return '';
@@ -162,10 +160,10 @@ const displayStatus = status || 'On Schedule';
     {effectiveRegistryUrl && (
       <a href={effectiveRegistryUrl} target="_blank" rel="noopener noreferrer"
          class="research-btn research-btn--registry"
-         title={registryBook ? 'Search Registry of Deeds by Book/Page' : 'View Registry of Deeds'}
-         aria-label="Search Registry of Deeds">
+         title={registryBook ? `Registry of Deeds — Book ${registryBook}, Page ${registryPage}` : 'Registry of Deeds'}
+         aria-label="Registry of Deeds">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15h8v2H8zm0-4h8v2H8z"/></svg>
-        <span>Registry</span>
+        <span>Registry{registryBook ? ` · Bk ${registryBook}` : ''}</span>
       </a>
     )}
   </div>
