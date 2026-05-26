@@ -14,15 +14,16 @@ interface Props {
   zillowUrl?: string;
   streetViewUrl?: string;
   registryUrl?: string;
+  registryDeepLink?: string;
   registryBook?: number;
   registryPage?: number;
   nearbyLandmarks?: string[];
 }
 
-const { id, link, date, time: auctionTime, address, city, state, status, deposit, siteName, logo, zillowUrl, streetViewUrl, registryUrl, registryBook, registryPage, nearbyLandmarks } =
+const { id, link, date, time: auctionTime, address, city, state, status, deposit, siteName, logo, zillowUrl, streetViewUrl, registryUrl, registryDeepLink, registryBook, registryPage, nearbyLandmarks } =
   Astro.props;
 
-const effectiveRegistryUrl = registryUrl ?? '';
+const effectiveRegistryUrl = (registryDeepLink || registryUrl) ?? '';
 
 function toISODate(str: string): string {
   if (!str) return '';

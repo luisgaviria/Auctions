@@ -56,7 +56,7 @@
         auction.link          && `<a href="${auction.link}"           target="_blank" rel="noopener noreferrer" class="popup-btn popup-btn--listing">Listing</a>`,
         auction.zillow_url    && `<a href="${auction.zillow_url}"     target="_blank" rel="noopener noreferrer" class="popup-btn popup-btn--zillow">Zillow</a>`,
         auction.street_view_url && `<a href="${auction.street_view_url}" target="_blank" rel="noopener noreferrer" class="popup-btn popup-btn--maps">Maps</a>`,
-        auction.registry_url  && `<a href="${auction.registry_url}"   target="_blank" rel="noopener noreferrer" class="popup-btn popup-btn--registry">Registry</a>`,
+        (auction.registry_deep_link || auction.registry_url) && `<a href="${auction.registry_deep_link || auction.registry_url}" target="_blank" rel="noopener noreferrer" class="popup-btn popup-btn--registry">Registry</a>`,
       ].filter(Boolean).join('');
 
       const popup = new maplibregl.Popup({

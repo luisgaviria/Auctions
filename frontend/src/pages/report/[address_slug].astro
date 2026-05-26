@@ -25,6 +25,7 @@ type Report = {
     zillow_url: string;
     street_view_url: string;
     registry_url: string;
+    registry_deep_link?: string;
     registry_book?: number;
     registry_page?: number;
     assessor_pid?: string;
@@ -72,7 +73,7 @@ for (const item of checklist) {
   grouped[item.category].push(item);
 }
 
-const effectiveRegistryUrl = auction.registry_url ?? '';
+const effectiveRegistryUrl = (auction.registry_deep_link || auction.registry_url) ?? '';
 ---
 
 <Layout title={pageTitle} description={description} canonical={`${Astro.url.origin}/report/${address_slug}`}>

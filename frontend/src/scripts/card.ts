@@ -48,8 +48,9 @@ export function createCardHTML(auction: any): string {
         <span>Maps</span>
       </button>`
     : '';
-  const registryBtn = auction.registry_url
-    ? `<button type="button" class="research-btn research-btn--registry" title="View Registry of Deeds" aria-label="View Registry of Deeds" onclick="${safeOpen(auction.registry_url)}">
+  const registryTarget = auction.registry_deep_link || auction.registry_url;
+  const registryBtn = registryTarget
+    ? `<button type="button" class="research-btn research-btn--registry" title="View Registry of Deeds" aria-label="View Registry of Deeds" onclick="${safeOpen(registryTarget)}">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15h8v2H8zm0-4h8v2H8z"/></svg>
         <span>Registry</span>
       </button>`

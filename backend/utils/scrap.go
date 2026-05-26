@@ -848,6 +848,92 @@ func backfillRegistryCoordinates(ctx context.Context, db *sql.DB) {
 		fixed, len(candidates), skipped)
 }
 
+// backfillRegistryDeepLinks resolves the specific deed document URL for every
+// row that has registry book/page coordinates but no deep link yet.
+// It uses CFetch (Cloudflare Browser Rendering) to render the LAREDO
+// hash-fragment search URL so the SPA routing and AJAX settle before we parse.
+// Processes at most 25 rows per invocation to cap CF quota usage; subsequent
+// runs will handle remaining rows.  Runs as a background goroutine.
+func backfillRegistryDeepLinks(db *sql.DB) {
+	const maxPerRun = 25
+	const sel = `
+		SELECT id, registry_url, registry_book, registry_page
+		FROM   auctions
+		WHERE  registry_book  IS NOT NULL
+		  AND  registry_page  IS NOT NULL
+		  AND  registry_deep_link IS NULL
+		  AND  registry_url   IS NOT NULL
+		  AND  registry_url NOT LIKE '%barnstabledeeds%'
+		LIMIT $1`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
+	rows, err := db.QueryContext(ctx, sel, maxPerRun)
+	if err != nil {
+		log.Printf("[backfill-deeplink] query error: %v", err)
+		return
+	}
+
+	type candidate struct {
+		id          int
+		registryURL string
+		book        int
+		page        int
+	}
+	var candidates []candidate
+	for rows.Next() {
+		var c candidate
+		var book, page sql.NullInt64
+		if err := rows.Scan(&c.id, &c.registryURL, &book, &page); err == nil {
+			c.book = int(book.Int64)
+			c.page = int(page.Int64)
+			candidates = append(candidates, c)
+		}
+	}
+	rows.Close()
+
+	if len(candidates) == 0 {
+		log.Printf("[backfill-deeplink] all rows already have deep links — nothing to do")
+		return
+	}
+	log.Printf("[backfill-deeplink] resolving %d deed URL(s) via CF Browser Rendering", len(candidates))
+
+	found, skipped := 0, 0
+	for _, c := range candidates {
+		base := strings.TrimRight(c.registryURL, "/")
+		hashURL := fmt.Sprintf(
+			"%s/#page=searchEntry&searchtype=Standard&recordtype=MR&book=%d&bookpage=%d",
+			base, c.book, c.page,
+		)
+		log.Printf("[backfill-deeplink] id=%d fetching %s", c.id, hashURL)
+
+		html, err := sites.CFetch(ctx, hashURL)
+		if err != nil {
+			log.Printf("[backfill-deeplink] id=%d cfetch error: %v", c.id, err)
+			skipped++
+			continue
+		}
+
+		docURL := ExtractDocumentURL(html, base)
+		if docURL == "" {
+			log.Printf("[backfill-deeplink] id=%d no document link found in rendered HTML (%d bytes)", c.id, len(html))
+			skipped++
+			continue
+		}
+
+		_, err = db.ExecContext(ctx,
+			`UPDATE auctions SET registry_deep_link=$1 WHERE id=$2`, docURL, c.id)
+		if err != nil {
+			log.Printf("[backfill-deeplink] id=%d db update error: %v", c.id, err)
+		} else {
+			log.Printf("[backfill-deeplink] id=%d deep link stored: %s", c.id, docURL)
+			found++
+		}
+	}
+	log.Printf("[backfill-deeplink] complete: found=%d skipped=%d", found, skipped)
+}
+
 // scraperDef pairs a canonical site name with a context-aware scraper function.
 // fallbackURL is non-empty for CF-based scrapers; it is used to re-fetch HTML
 // for the AI self-healing fallback when the scraper returns 0 results.
@@ -1138,6 +1224,11 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 	// Backfill: NormalizeAuction extracts book/page inline for every new row.
 	// This pass also catches existing DB rows that pre-date book/page extraction.
 	backfillRegistryCoordinates(ctx, db)
+
+	// Deep-link backfill: for rows that now have book/page but no direct
+	// document URL, attempt to resolve the specific deed via CF Browser Rendering.
+	// Runs in the background so the main pipeline does not wait on CF jobs.
+	go backfillRegistryDeepLinks(db)
 
 	log.Printf("[scraper] run complete")
 }

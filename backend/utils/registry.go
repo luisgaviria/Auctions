@@ -1,6 +1,9 @@
 package utils
 
-import "regexp"
+import (
+	"regexp"
+	"strings"
+)
 
 // ── Book / Page extraction ────────────────────────────────────────────────────
 
@@ -45,4 +48,33 @@ func ExtractBookPage(legal string) (book, page string) {
 		return m[1], m[2]
 	}
 	return "", ""
+}
+
+// ── Registry deep-link extraction ─────────────────────────────────────────────
+
+// laredoDocRe matches a Tyler Technologies LAREDO document anchor in a
+// fully-rendered search-results page.  The href may be relative
+// (Document.aspx?id=…) or absolute (https://…/District/Document.aspx?id=…).
+// Group 1 captures the raw href value.
+var laredoDocRe = regexp.MustCompile(`(?i)href="([^"]*Document\.aspx\?[^"]*id=\d+[^"]*)"`)
+
+// ExtractDocumentURL scans a fully-rendered LAREDO search-results HTML page
+// for the first document link and returns an absolute URL.
+// registryBase is the district root (e.g. "https://www.masslandrecords.com/MiddlesexSouth").
+// Returns "" when no document link is found.
+func ExtractDocumentURL(html, registryBase string) string {
+	m := laredoDocRe.FindStringSubmatch(html)
+	if len(m) < 2 {
+		return ""
+	}
+	href := m[1]
+	if strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") {
+		return href
+	}
+	// Relative URL — make it absolute using the registry base.
+	base := strings.TrimRight(registryBase, "/")
+	if !strings.HasPrefix(href, "/") {
+		href = "/" + href
+	}
+	return base + href
 }
