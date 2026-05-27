@@ -36,6 +36,7 @@ const auctionCols = `id, address, city, state, time, logo, status, link,
 
 // selectFilteredAuctions excludes terminal/past statuses, drops past-dated rows,
 // and sorts upcoming auctions chronologically.
+// $1=limit  $2=offset  $3=search pattern (use '%' to match all)
 var selectFilteredAuctions = `
 	SELECT ` + auctionCols + ` FROM auctions
 	WHERE LOWER(status) NOT IN (
@@ -44,6 +45,7 @@ var selectFilteredAuctions = `
 		'past', '3rd party purchase', 'postponed'
 	)
 	AND (date >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York')::date OR date IS NULL)
+	AND (address ILIKE $3 OR city ILIKE $3)
 	ORDER BY date ASC NULLS LAST, time ASC NULLS LAST
 	LIMIT $1 OFFSET $2`
 
@@ -63,18 +65,23 @@ var selectAuctionsInBounds = `
 	ORDER BY date ASC NULLS LAST, time ASC NULLS LAST
 	LIMIT 200`
 
-func (s *AuctionsService) GetAuctions(limit, offset int) ([]byte, int, error) {
+func (s *AuctionsService) GetAuctions(limit, offset int, search string) ([]byte, int, error) {
 	easternTZ, _ := time.LoadLocation("America/New_York")
 	todayStr := time.Now().In(easternTZ).Format("2006-01-02")
-	cacheKey := fmt.Sprintf("auctions_%s_%d_%d", todayStr, limit, offset)
+	cacheKey := fmt.Sprintf("auctions_%s_%d_%d_%s", todayStr, limit, offset, search)
 	if cached, found := cache.Cache.Get(cacheKey); found {
 		if data, ok := cached.([]byte); ok {
 			return data, http.StatusOK, nil
 		}
 	}
 
+	searchParam := "%"
+	if s := strings.TrimSpace(search); s != "" {
+		searchParam = "%" + s + "%"
+	}
+
 	auctions := make([]models.AuctionJSON, 0)
-	rows, err := s.DB.Query(selectFilteredAuctions, limit, offset)
+	rows, err := s.DB.Query(selectFilteredAuctions, limit, offset, searchParam)
 	if err != nil {
 		log.Printf("Database error: %v\n", err)
 		return nil, http.StatusInternalServerError, err

@@ -8,6 +8,7 @@ export interface PageState {
   isMapView: boolean;
   mapViewInitialised: boolean;
   currentMapAuctions: any[] | null;
+  search: string;
 }
 
 export const state: PageState = {
@@ -20,6 +21,7 @@ export const state: PageState = {
   isMapView: false,
   mapViewInitialised: false,
   currentMapAuctions: null,
+  search: '',
 };
 
 /** Hydrates state from the hidden #page-config element written by index.astro. */

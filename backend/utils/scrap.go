@@ -854,7 +854,7 @@ func backfillRegistryCoordinates(ctx context.Context, db *sql.DB) {
 // hash-fragment search URL so the SPA routing and AJAX settle before we parse.
 // Processes at most 25 rows per invocation to cap CF quota usage; subsequent
 // runs will handle remaining rows.  Runs as a background goroutine.
-func backfillRegistryDeepLinks(db *sql.DB) {
+func BackfillRegistryDeepLinks(db *sql.DB) {
 	const maxPerRun = 25
 	const sel = `
 		SELECT id, registry_url, registry_book, registry_page
@@ -1225,10 +1225,10 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 	// This pass also catches existing DB rows that pre-date book/page extraction.
 	backfillRegistryCoordinates(ctx, db)
 
-	// Deep-link backfill: for rows that now have book/page but no direct
-	// document URL, attempt to resolve the specific deed via CF Browser Rendering.
-	// Runs in the background so the main pipeline does not wait on CF jobs.
-	go backfillRegistryDeepLinks(db)
+	// Deep-link backfill disabled: masslandrecords.com is purely PostBack-driven
+	// (ASP.NET WebForms) — no GET/hash URL can pre-fill or submit a book/page
+	// search. A Cloudflare Worker with Puppeteer is required to automate the form.
+	// go BackfillRegistryDeepLinks(db)
 
 	log.Printf("[scraper] run complete")
 }

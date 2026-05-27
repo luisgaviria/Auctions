@@ -71,6 +71,22 @@ const hasMore = auctions.length === LIMIT;
         <p class="text-secondary">Massachusetts · updated daily</p>
       </header>
 
+      <div class="search-bar-wrap">
+        <div class="search-bar">
+          <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            id="auction-search"
+            type="search"
+            placeholder="Search by address or city…"
+            aria-label="Search auctions by address or city"
+            autocomplete="off"
+          />
+          <button id="search-clear-btn" class="search-clear" aria-label="Clear search" style="display:none">×</button>
+        </div>
+      </div>
+
       {error ? (
         <div class="error-state">
           <i class="fas fa-exclamation-circle" />
@@ -132,6 +148,8 @@ const hasMore = auctions.length === LIMIT;
 
 <script>
   import '../scripts/main';
+  import { initSearch } from '../scripts/search';
+  document.addEventListener('DOMContentLoaded', initSearch);
 </script>
 
 <script>
@@ -208,4 +226,65 @@ const hasMore = auctions.length === LIMIT;
     max-width: 400px;
     margin-bottom: var(--spacing-lg);
   }
+
+  .search-bar-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .search-bar {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    align-items: center;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 0.875rem;
+    color: var(--color-text-secondary);
+    pointer-events: none;
+    flex-shrink: 0;
+  }
+
+  #auction-search {
+    width: 100%;
+    padding: 0.625rem 2.5rem 0.625rem 2.5rem;
+    background: var(--color-surface, #18181b);
+    border: 1px solid var(--color-border, #3f3f46);
+    border-radius: 0.5rem;
+    color: var(--color-text-primary, #fafafa);
+    font-size: 0.9375rem;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  #auction-search:focus {
+    border-color: var(--color-primary, #22c55e);
+  }
+
+  #auction-search::placeholder {
+    color: var(--color-text-secondary, #71717a);
+  }
+
+  /* hide the native × on Chrome/Safari so we use our own */
+  #auction-search::-webkit-search-cancel-button { display: none; }
+
+  .search-clear {
+    position: absolute;
+    right: 0.625rem;
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    font-size: 1.125rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 50%;
+    transition: color 0.15s;
+  }
+
+  .search-clear:hover { color: var(--color-text-primary); }
 </style>

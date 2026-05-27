@@ -115,6 +115,11 @@ export function appendMapCards(newAuctions: any[]): void {
   while (temp.firstElementChild) container.appendChild(temp.firstElementChild);
 }
 
+export function clearMapCards(): void {
+  const container = document.getElementById('map-card-list');
+  if (container) container.innerHTML = '';
+}
+
 // ── Lazy map mount ─────────────────────────────────────────────────────────────
 // Map.svelte + Svelte runtime (~19 KiB) are NOT included in the initial bundle.
 // They are fetched only when the user opens map view for the first time.

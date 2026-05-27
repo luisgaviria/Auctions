@@ -31,7 +31,8 @@ export async function loadMore(triggerBtn: HTMLButtonElement): Promise<void> {
   triggerBtn.disabled    = true;
 
   try {
-    const response = await fetch(`${state.apiUrl}/auctions?limit=${state.LIMIT}&offset=${state.offset}`);
+    const searchParam = state.search ? `&search=${encodeURIComponent(state.search)}` : '';
+    const response = await fetch(`${state.apiUrl}/auctions?limit=${state.LIMIT}&offset=${state.offset}${searchParam}`);
     if (!response.ok) throw new Error('Server error');
     const data        = await response.json();
     const newAuctions: any[] = filterPastAuctions(data.auctions || []);

@@ -58,7 +58,8 @@ func (c *AuctionsController) GetAuctions(w http.ResponseWriter, req *http.Reques
 		}
 	}
 
-	data, status, err := service.GetAuctions(limit, offset)
+	search := q.Get("search")
+	data, status, err := service.GetAuctions(limit, offset, search)
 	if err != nil {
 		w.WriteHeader(status)
 		w.Write([]byte(err.Error()))
