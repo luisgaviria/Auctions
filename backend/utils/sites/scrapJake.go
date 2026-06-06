@@ -18,6 +18,7 @@ func ScrapJake() []Auction {
 	logo := "/jake.webp"
 
 	c := colly.NewCollector()
+	c.SetRequestTimeout(60 * time.Second)
 
 	c.OnHTML("body font p[align='left']", func(e *colly.HTMLElement) {
 		fonts := e.DOM.Find("font")
@@ -34,6 +35,7 @@ func ScrapJake() []Auction {
 		}
 
 		c2 := colly.NewCollector()
+		c2.SetRequestTimeout(60 * time.Second)
 		c2.OnHTML("body", func(e2 *colly.HTMLElement) {
 			termsText := strings.Split(e2.Text, "TERMS")[1]
 			price := strings.Split(termsText, "Dollars")[0]

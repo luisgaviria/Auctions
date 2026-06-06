@@ -4,6 +4,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/gocolly/colly"
 )
@@ -21,6 +22,7 @@ func scrapAuctionDetails(baseURL, detailURL string, auction *Auction) error { //
 	c := colly.NewCollector(
 		colly.AllowedDomains("www.amgauction.com"),
 	)
+	c.SetRequestTimeout(60 * time.Second)
 
 	c.OnError(func(r *colly.Response, err error) {
 		log.Println("Request URL:", r.Request.URL, "failed:", err)

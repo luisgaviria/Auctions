@@ -3,6 +3,7 @@ package sites
 import (
 	"log"
 	"strings"
+	"time"
 
 	"github.com/gocolly/colly/v2"
 )
@@ -10,8 +11,9 @@ import (
 func ScrapTache() []Auction {
 	url := "https://docs.google.com/spreadsheets/u/1/d/14nrcaKBhCA61FcnBwU6EbiDbRQtOP-gQVxJVvxg5_o0/pubhtml/sheet?headers=false&gid=0"
 	c := colly.NewCollector(
-		colly.MaxDepth(1),
+		colly.UserAgent("Mozilla/5.0"),
 	)
+	c.SetRequestTimeout(60 * time.Second)
 
 	var data []Auction
 

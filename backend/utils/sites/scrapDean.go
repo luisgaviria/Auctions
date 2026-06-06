@@ -62,6 +62,7 @@ func normalizeDeanDate(s string) string {
 func ScrapDean() []Auction {
 	url := "https://deanassociatesinc.com/auctions/"
 	c := colly.NewCollector()
+	c.SetRequestTimeout(60 * time.Second)
 	priceRegex := regexp.MustCompile(`\$[\d,]+`)
 
 	auctions := make([]Auction, 0)

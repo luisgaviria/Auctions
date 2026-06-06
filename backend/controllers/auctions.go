@@ -4,6 +4,7 @@ import (
 	"backendAuction/services"
 	"backendAuction/utils/cache"
 	"database/sql"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -18,11 +19,8 @@ func (c *AuctionsController) GetAuctions(w http.ResponseWriter, req *http.Reques
 	q := req.URL.Query()
 	service := services.NewAuctionsService(c.DB)
 
-	// Bounding-box search: all four params must be present and valid.
-	northStr := q.Get("north")
-	southStr := q.Get("south")
-	eastStr := q.Get("east")
-	westStr := q.Get("west")
+	northStr, southStr := q.Get("north"), q.Get("south")
+	eastStr, westStr := q.Get("east"), q.Get("west")
 
 	if northStr != "" && southStr != "" && eastStr != "" && westStr != "" {
 		north, errN := strconv.ParseFloat(northStr, 64)
@@ -34,11 +32,15 @@ func (c *AuctionsController) GetAuctions(w http.ResponseWriter, req *http.Reques
 			data, status, err := service.GetAuctionsInBounds(south, north, west, east)
 			if err != nil {
 				w.WriteHeader(status)
-				w.Write([]byte(err.Error()))
+				if _, writeErr := w.Write([]byte(err.Error())); writeErr != nil {
+					log.Printf("[auctions] write error: %v", writeErr)
+				}
 				return
 			}
 			w.WriteHeader(status)
-			w.Write(data)
+			if _, writeErr := w.Write(data); writeErr != nil {
+				log.Printf("[auctions] write error: %v", writeErr)
+			}
 			return
 		}
 	}
@@ -62,11 +64,15 @@ func (c *AuctionsController) GetAuctions(w http.ResponseWriter, req *http.Reques
 	data, status, err := service.GetAuctions(limit, offset, search)
 	if err != nil {
 		w.WriteHeader(status)
-		w.Write([]byte(err.Error()))
+		if _, writeErr := w.Write([]byte(err.Error())); writeErr != nil {
+			log.Printf("[auctions] write error: %v", writeErr)
+		}
 		return
 	}
 	w.WriteHeader(status)
-	w.Write(data)
+	if _, writeErr := w.Write(data); writeErr != nil {
+		log.Printf("[auctions] write error: %v", writeErr)
+	}
 }
 
 // GetTopSlugs handles GET /auctions/slugs[?limit=N].
@@ -126,5 +132,10 @@ func (c *AuctionsController) GetReport(w http.ResponseWriter, req *http.Request)
 
 // InvalidateCache clears all paginated auction cache entries.
 func (c *AuctionsController) InvalidateCache() {
-	cache.Cache.Flush()
+	for k := range cache.Cache.Items() {
+		// Only invalidate keys related to the auctions list, keeping others intact
+		if len(k) >= 9 && k[:9] == "auctions_" {
+			cache.Cache.Delete(k)
+		}
+	}
 }

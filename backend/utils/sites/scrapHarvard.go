@@ -2,6 +2,7 @@ package sites
 
 import (
 	"strings"
+	"time"
 
 	"github.com/gocolly/colly/v2"
 )
@@ -9,6 +10,7 @@ import (
 func ScrapHarvard() []Auction {
 	url := "https://www.harvardauctioneers.com/"
 	c := colly.NewCollector()
+	c.SetRequestTimeout(60 * time.Second)
 
 	auctions := make([]Auction, 0)
 

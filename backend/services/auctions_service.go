@@ -175,9 +175,7 @@ func (s *AuctionsService) GetAuctionsBySlug(countySlug, citySlug string) ([]byte
 		SELECT
 			MAX(city)                                                          AS city_name,
 			COUNT(*)                                                           AS auction_count,
-			ROUND(AVG(
-				NULLIF(REGEXP_REPLACE(deposit, '[^0-9]', '', 'g'), '')::numeric
-			))                                                                 AS avg_deposit
+			ROUND(AVG(NULLIF(deposit, 0)))                                     AS avg_deposit
 		FROM auctions
 		WHERE LOWER(county_slug) = $1
 		  AND LOWER(city_slug)   = $2

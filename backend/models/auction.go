@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"strconv"
 	"time"
 )
 
@@ -18,9 +19,9 @@ type AuctionModel struct {
 	Status           string         `json:"status"`
 	Link             string         `json:"link"`
 	Date             sql.NullTime   `json:"-"` // scanned as nullable; use ToJSON() for API responses
-	Deposit          string         `json:"deposit"`
-	Lat              string         `json:"lat"`
-	Lng              string         `json:"lng"`
+	Deposit          sql.NullInt64  `json:"-"` // scraped integer deposit; format to string in ToJSON()
+	Lat              sql.NullFloat64`json:"-"` // stored as double precision
+	Lng              sql.NullFloat64`json:"-"` // stored as double precision
 	Createdat        time.Time      `json:"createdAt"`
 	UpdatedAt        time.Time      `json:"updated_at"`
 	LastSeen         sql.NullTime   `json:"-"` // internal sync column; not exposed in API responses
@@ -73,12 +74,49 @@ type AuctionReport struct {
 	AssessorURL  string             `json:"assessor_url,omitempty"`
 }
 
+// formatDeposit takes a raw int and formats it to $X,XXX.
+func formatDeposit(deposit int) string {
+	if deposit == 0 {
+		return ""
+	}
+	// simple comma formatting
+	s := strconv.Itoa(deposit)
+	if len(s) <= 3 {
+		return "$" + s
+	}
+	var result []byte
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			result = append(result, ',')
+		}
+		result = append(result, byte(c))
+	}
+	return "$" + string(result)
+}
+
+// formatFloat takes a float and converts it to string.
+func formatFloat(f float64) string {
+	if f == 0 {
+		return "0"
+	}
+	return strconv.FormatFloat(f, 'f', -1, 64)
+}
+
 // ToJSON converts a scanned AuctionModel into an API-safe AuctionJSON.
 func (a AuctionModel) ToJSON() AuctionJSON {
 	date := ""
 	if a.Date.Valid {
 		date = a.Date.Time.Format("Jan 2, 2006")
 	}
+	depositStr := ""
+	if a.Deposit.Valid {
+		depositStr = formatDeposit(int(a.Deposit.Int64))
+	}
+	
+	latStr, lngStr := "0", "0"
+	if a.Lat.Valid { latStr = formatFloat(a.Lat.Float64) }
+	if a.Lng.Valid { lngStr = formatFloat(a.Lng.Float64) }
+
 	return AuctionJSON{
 		Id:               a.Id,
 		Address:          a.Address,
@@ -90,9 +128,9 @@ func (a AuctionModel) ToJSON() AuctionJSON {
 		Status:           a.Status,
 		Link:             a.Link,
 		Date:             date,
-		Deposit:          a.Deposit,
-		Lat:              a.Lat,
-		Lng:              a.Lng,
+		Deposit:          depositStr,
+		Lat:              latStr,
+		Lng:              lngStr,
 		ZillowURL:        a.ZillowURL.String,
 		StreetViewURL:    a.StreetViewURL.String,
 		RegistryURL:      a.RegistryURL.String,

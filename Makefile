@@ -4,13 +4,8 @@ BACKEND_DIR  := backend
 
 .PHONY: dev backend frontend install-air
 
-# Start both backend (hot-reload) and frontend in parallel.
-# A single Ctrl+C sends SIGINT to the process group, stopping both.
 dev:
-	@trap 'kill 0' INT; \
-	(cd $(BACKEND_DIR) && $(AIR)) & \
-	(sleep 3 && cd $(FRONTEND_DIR) && rm -rf node_modules/.vite && npm run dev) & \
-	wait
+	make -j2 backend frontend
 
 # Run backend only (hot-reload via air)
 backend:

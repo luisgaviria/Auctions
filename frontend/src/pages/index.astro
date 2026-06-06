@@ -10,32 +10,13 @@ const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 let auctions: any[] = [];
 let error: string | null = null;
 
-// todayET returns the current calendar date in America/New_York as a
-// comparable string ("YYYY-MM-DD") using the Intl API.
-function todayET(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-}
-
-// filterPastAuctions removes auctions whose date has already passed in ET.
-// date strings arrive from the API as "Apr 2, 2026" (Jan 2, 2006 format).
-// Rows with no date are kept — they have no scheduled date, not a past one.
-function filterPastAuctions(list: any[]): any[] {
-  const today = todayET(); // "2026-04-03"
-  return list.filter((a) => {
-    if (!a.date) return true;
-    const parsed = new Date(a.date);
-    if (isNaN(parsed.getTime())) return true; // unparseable → keep
-    // toLocaleDateString('en-CA') gives "YYYY-MM-DD" — safe string compare
-    return parsed.toLocaleDateString('en-CA') >= today;
-  });
-}
-
 try {
   console.log('Fetching auctions from:', apiUrl);
   const response = await axios.get(`${apiUrl}/auctions?limit=${LIMIT}&offset=0`, {
     headers: { 'Content-Type': 'application/json' },
   });
-  auctions = filterPastAuctions(response.data.auctions);
+  // The backend API already filters out past auctions using the America/New_York timezone
+  auctions = response.data.auctions;
 } catch (e) {
   console.error('Error fetching auctions:', e);
   if (e instanceof AxiosError) {

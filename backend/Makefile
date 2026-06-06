@@ -1,3 +1,5 @@
+include .env
+
 AIR := $(HOME)/go/bin/air
 
 run:
@@ -5,3 +7,12 @@ run:
 
 dev:
 	$(AIR)
+
+migrate-up:
+	goose postgres "$(DATABASE_URL)" up -dir ./migrations
+
+migrate-down:
+	goose postgres "$(DATABASE_URL)" down -dir ./migrations
+
+connect:
+	

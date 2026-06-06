@@ -120,6 +120,9 @@ func CleanStreetAddress(s string) string {
 // Handles edge cases like trailing state abbreviations in parentheses.
 var urlJunkRe = regexp.MustCompile(`(?i)\([^)]*\)|\bMA\s*,?\s*MA\b`)
 
+// depositCleanRe strips all non-numeric characters from a deposit string.
+var depositCleanRe = regexp.MustCompile(`[^0-9]`)
+
 // GenerateSlug converts a display string into a URL-safe slug.
 //
 //	"Jamaica Plain"   → "jamaica-plain"
@@ -380,6 +383,7 @@ func NormalizeAuction(a sites.Auction) sites.Auction {
 	a.Status = normalizeStatus(a.Status)
 	a.Time = normalizeTime(a.Time)
 	a.ZillowURL, a.StreetViewURL, a.RegistryURL = buildAuctionURLs(a.Street, a.City)
+	a.Deposit = depositCleanRe.ReplaceAllString(a.Deposit, "")
 
 	// Extract Book/Page coordinates from the legal description and store the
 	// raw integers.  The frontend builds the full URL dynamically from the
@@ -573,7 +577,7 @@ func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 		a.Status,        // $7  status
 		a.Url,           // $8  link
 		dateParam,       // $9  date
-		a.Deposit,       // $10 deposit
+		nullIfZero(atoiSafe(a.Deposit)), // $10 deposit (integer)
 		"0",             // $11 lat
 		"0",             // $12 lng
 		a.ZillowURL,           // $13 zillow_url

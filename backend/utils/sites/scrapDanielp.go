@@ -50,6 +50,7 @@ func ScrapDanielP() []Auction {
 	url := "https://www.re-auctions.com/Auction-Schedule/PropertyAgentName/-1/sortBy/cf11"
 
 	c := colly.NewCollector()
+	c.SetRequestTimeout(60 * time.Second)
 
 	auctions := make([]Auction, 0)
 

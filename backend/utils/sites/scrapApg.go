@@ -2,6 +2,7 @@ package sites
 
 import (
 	"strings"
+	"time"
 
 	"github.com/gocolly/colly/v2"
 )
@@ -24,6 +25,7 @@ func ScrapApg() []Auction {
 	url := "https://apg-online.com/auction-schedule/"
 
 	c := colly.NewCollector()
+	c.SetRequestTimeout(60 * time.Second)
 
 	auctions := make([]Auction, 0)
 
