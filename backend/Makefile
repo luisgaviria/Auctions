@@ -13,6 +13,3 @@ migrate-up:
 
 migrate-down:
 	goose postgres "$(DATABASE_URL)" down -dir ./migrations
-
-connect:
-	
