@@ -1,5 +1,5 @@
 ---
-import '../styles/Topbar.css';
+import '../styles/topbar.css';
 const apiUrl = import.meta.env.VITE_API_URL;
 const path = Astro.url.pathname;
 const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));

@@ -1,5 +1,5 @@
 <script>
-  import '../styles/Map.css';
+  import '../styles/map.css';
   import { onMount, onDestroy } from 'svelte';
   // `?url` tells Vite to copy the file to the build output and give us the hashed
   // URL as a string — without injecting the CSS into the page automatically.
