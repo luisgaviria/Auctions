@@ -1,0 +1,344 @@
+/* Auction Card component styles */
+
+/* Visually hidden but present in DOM for screen readers, crawlers, and LLMs */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ═══════════════════════════════════════════════
+   Auction Card — Vercel-style
+   ═══════════════════════════════════════════════ */
+
+/* ── Scroll-reveal: start hidden, slide up ── */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-reveal].revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.auction-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: inherit;
+  /* overflow moved to card-inner so 3D tilt shadow is not clipped */
+  transition: border-color 0.2s ease, transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease;
+  will-change: transform;
+  transform-style: preserve-3d;
+}
+
+.auction-card:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* ── Spotlight glow ── */
+.auction-card .card-spotlight {
+  display: block;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: radial-gradient(
+    320px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    color-mix(in srgb, var(--color-accent) 10%, transparent),
+    transparent 70%
+  );
+  z-index: 0;
+}
+.auction-card:hover .card-spotlight { opacity: 1; }
+
+.auction-card .card-inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 1.375rem 1.375rem 1.125rem;
+  gap: 1rem;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+/* ── Header ── */
+.auction-card .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.auction-card .status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Colored dot */
+.auction-card .status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--color-text-muted);
+}
+
+.auction-card .status-indicator[data-status='active'] .status-dot {
+  background: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 20%, transparent);
+  animation: card-dot-pulse 2.4s ease-in-out infinite;
+}
+
+.auction-card .status-indicator[data-status='postponed'] .status-dot {
+  background: var(--color-warning);
+}
+
+@keyframes card-dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 40%, transparent); }
+  50%       { box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-accent) 0%, transparent); }
+}
+
+.auction-card .status-text {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.auction-card .status-indicator[data-status='active'] .status-text {
+  color: var(--color-accent);
+}
+
+.auction-card .status-indicator[data-status='postponed'] .status-text {
+  color: var(--color-warning);
+}
+
+/* Auctioneer name */
+.auction-card .auctioneer-label {
+  font-family: var(--font-mono);
+  font-size: 0.675rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+  flex-shrink: 0;
+}
+
+/* ── Address block ── */
+.auction-card .card-address-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  flex: 1;
+}
+
+.auction-card .property-address {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.3;
+  color: var(--color-text-primary);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.auction-card .location-line {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  margin: 0;
+}
+
+/* ── Data row ── */
+.auction-card .card-data-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--color-border);
+  padding-top: 1rem;
+  gap: 0;
+  transition: border-color 0.2s ease;
+}
+
+.auction-card:hover .card-data-row {
+  border-top-color: var(--color-accent);
+}
+
+.auction-card .data-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-right: 1rem;
+  border-right: 1px solid var(--color-border);
+}
+
+.auction-card .data-cell:first-child { padding-left: 0; }
+.auction-card .data-cell:last-child  { border-right: none; padding-right: 0; padding-left: 1rem; }
+.auction-card .data-cell:not(:first-child):not(:last-child) { padding-left: 1rem; }
+
+.auction-card .data-value {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.auction-card .data-value--tbd {
+  color: var(--color-text-muted);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.auction-card .data-label {
+  font-family: var(--font-mono);
+  font-size: 0.675rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  line-height: 1;
+}
+
+/* ── Footer ── */
+.auction-card .card-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.25rem;
+}
+
+.auction-card .favorite-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  transition: all 0.15s ease;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.auction-card .favorite-btn:hover {
+  background: var(--color-danger);
+  color: #fff;
+  border-color: var(--color-danger);
+}
+
+.auction-card .favorite-btn[aria-pressed='true'] {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.auction-card .favorite-btn[data-loading='true'] .icon { opacity: 0; }
+
+.auction-card .fav-spinner {
+  display: none;
+  position: absolute;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: 50%;
+  border-top-color: var(--color-accent);
+  animation: fav-spin 0.6s linear infinite;
+}
+
+.auction-card .favorite-btn[data-loading='true'] .fav-spinner { display: block; }
+
+@keyframes fav-spin { to { transform: rotate(360deg); } }
+
+/* ── Research toolbar — sits outside card-inner, pinned to card bottom ── */
+.auction-card .card-research {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  padding: 0.75rem 1.375rem;
+  border-top: 1px solid var(--color-border);
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
+}
+
+.auction-card .research-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.375rem 0.25rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.auction-card .research-btn--auction:hover {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
+.auction-card .research-btn--zillow:hover {
+  background: #006aff;
+  color: #fff;
+  border-color: #006aff;
+}
+
+.auction-card .research-btn--streetview:hover {
+  background: #ea4335;
+  color: #fff;
+  border-color: #ea4335;
+}
+
+.auction-card .research-btn--registry:hover {
+  background: #1a7340;
+  color: #fff;
+  border-color: #1a7340;
+}

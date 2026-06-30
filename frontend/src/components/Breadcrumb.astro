@@ -1,4 +1,5 @@
 ---
+import '../styles/Breadcrumb.css';
 interface Crumb {
   label: string;
   href?: string; // omit for the current (last) crumb
@@ -38,45 +39,4 @@ const schema = {
 
 <script type="application/ld+json" is:inline set:html={JSON.stringify(schema)} />
 
-<style>
-  .breadcrumb {
-    font-size: 0.8rem;
-    color: var(--color-text-muted);
-    margin-bottom: var(--spacing-lg);
-  }
 
-  .breadcrumb ol {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.25rem;
-  }
-
-  .breadcrumb li {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-  }
-
-  .breadcrumb a {
-    color: var(--color-text-muted);
-    text-decoration: none;
-    transition: color 0.15s ease;
-  }
-
-  .breadcrumb a:hover {
-    color: var(--color-accent);
-  }
-
-  .breadcrumb [aria-current='page'] {
-    color: var(--color-text-secondary);
-    font-weight: 500;
-  }
-
-  .sep {
-    color: var(--color-border);
-  }
-</style>

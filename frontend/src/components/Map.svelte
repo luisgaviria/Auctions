@@ -1,4 +1,5 @@
 <script>
+  import '../styles/Map.css';
   import { onMount, onDestroy } from 'svelte';
   // `?url` tells Vite to copy the file to the build output and give us the hashed
   // URL as a string — without injecting the CSS into the page automatically.
@@ -77,21 +78,15 @@
         </div>
       `);
 
-      el.addEventListener('click', () => {
-        const isMobile = window.innerWidth < 768;
-
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
         // Always fly to the tapped marker so it's centred on screen.
         map.flyTo({ center: lngLat, zoom: Math.max(map.getZoom(), 14), duration: 500 });
 
-        if (isMobile) {
-          // On mobile: skip the MapLibre popup and let the bottom sheet handle
-          // the detail view instead.
-          if (activePopup) { activePopup.remove(); activePopup = null; }
-        } else {
-          if (activePopup) activePopup.remove();
-          popup.setLngLat(lngLat).addTo(map);
-          activePopup = popup;
-        }
+        // Always show the beautiful MapLibre popup regardless of screen size
+        if (activePopup) activePopup.remove();
+        popup.setLngLat(lngLat).addTo(map);
+        activePopup = popup;
 
         // Notify the sidebar/sheet — include the full auction object so the
         // mobile sheet can render a complete card without a second fetch.
@@ -176,13 +171,35 @@
     }
 
     // ── Initialise map ─────────────────────────────────────────────────────────
+    const maptilerKey = import.meta.env.VITE_MAPTILER_KEY;
+    const mapStyle = maptilerKey 
+      ? `https://api.maptiler.com/maps/dataviz-dark/style.json?key=${maptilerKey}`
+      : {
+          version: 8,
+          sources: {
+            'osm-tiles': {
+              type: 'raster',
+              tiles: ['https://a.tile.openstreetmap.org/{z}/{x}/{y}.png'],
+              tileSize: 256,
+              attribution: '© OpenStreetMap contributors'
+            }
+          },
+          layers: [{
+            id: 'osm-tiles-layer',
+            type: 'raster',
+            source: 'osm-tiles',
+            minzoom: 0,
+            maxzoom: 19
+          }]
+        };
+
     map = new maplibregl.Map({
       container: mapContainer,
-      style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`,
+      style: mapStyle,
       center: [-71.0589, 42.3601],
-      zoom: 9,
+      zoom: 7,
+      attributionControl: false
     });
-
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
     map.on('load', () => {
@@ -286,213 +303,3 @@
     </button>
   {/if}
 </div>
-
-<style>
-  .map-container {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    min-height: 480px;
-    border-radius: 12px;
-    overflow: hidden;
-  }
-
-  /* ── Search this area button ── */
-  .search-area-btn {
-    position: absolute;
-    top: 1rem;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10;
-
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0.5rem 1rem;
-    border-radius: 999px;
-    border: 1px solid rgba(228, 228, 231, 0.6);
-    cursor: pointer;
-
-    font-family: var(--font-sans, system-ui, sans-serif);
-    font-size: 0.8125rem;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    color: #09090b;
-
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
-    transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
-    white-space: nowrap;
-  }
-
-  .search-area-btn:hover:not(:disabled) {
-    transform: translateX(-50%) translateY(-1px);
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16), 0 1px 4px rgba(0, 0, 0, 0.1);
-  }
-
-  .search-area-btn:disabled {
-    opacity: 0.75;
-    cursor: default;
-  }
-
-  /*
-   * Dark mode: only the ancestor selector ([data-theme='dark']) is :global.
-   * .search-area-btn and .btn-spinner keep their Svelte scoping hash so the
-   * rule correctly targets the elements rendered in this component's template.
-   */
-  :global([data-theme='dark']) .search-area-btn {
-    background: rgba(24, 24, 27, 0.85);
-    border-color: rgba(63, 63, 70, 0.6);
-    color: #fafafa;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
-  }
-
-  :global([data-theme='dark']) .search-area-btn .btn-spinner {
-    border-color: rgba(255, 255, 255, 0.2);
-    border-top-color: #fafafa;
-  }
-
-  .btn-spinner {
-    display: block;
-    width: 11px;
-    height: 11px;
-    border: 1.5px solid rgba(0, 0, 0, 0.2);
-    border-top-color: #09090b;
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-    flex-shrink: 0;
-  }
-
-  /* spin is used only inside this component's scoped template — no -global- needed */
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /*
-   * .map-marker is created via document.createElement (not in Svelte's template),
-   * so it never gets a scoping hash — :global() is required.
-   *
-   * @keyframes that are referenced from a :global() rule must also be global.
-   * Svelte achieves this with the -global- prefix: the compiler strips it and
-   * emits the keyframe name without any scope hash.
-   */
-  :global(.map-marker) {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--color-accent, #00b37e);
-    border: 2px solid #fff;
-    cursor: pointer;
-    animation: map-marker-pulse 2.4s ease-in-out infinite;
-  }
-
-  @keyframes -global-map-marker-pulse {
-    0%, 100% { box-shadow: 0 0 0 0   color-mix(in srgb, var(--color-accent, #00b37e) 40%, transparent); }
-    50%       { box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent, #00b37e)  0%, transparent); }
-  }
-
-  /* ── Popup styles (all MapLibre-injected DOM — always :global) ── */
-  :global(.auction-popup .maplibregl-popup-content) {
-    padding: 0;
-    border-radius: 12px;
-    border: 1px solid #e4e4e7;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-    overflow: hidden;
-    background: #fff;
-    font-family: var(--font-sans, system-ui, sans-serif);
-  }
-  :global(.auction-popup .maplibregl-popup-tip) { border-top-color: #fff; }
-
-  :global(.popup-inner) {
-    padding: 1rem 1.125rem 1.125rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-  }
-  :global(.popup-address) {
-    font-size: 0.9375rem;
-    font-weight: 700;
-    color: #09090b;
-    margin: 0;
-    line-height: 1.3;
-    letter-spacing: -0.02em;
-  }
-  :global(.popup-location) {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #71717a;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    font-family: var(--font-mono, monospace);
-    margin: 0;
-  }
-  :global(.popup-meta) {
-    display: flex;
-    gap: 0.375rem;
-    flex-wrap: wrap;
-    margin-top: 0.25rem;
-  }
-  :global(.popup-chip) {
-    font-family: var(--font-mono, monospace);
-    font-size: 0.6875rem;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: #f4f4f5;
-    color: #3f3f46;
-    white-space: nowrap;
-  }
-  :global(.popup-source) {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #a1a1aa;
-    font-family: var(--font-mono, monospace);
-    margin: 0;
-  }
-  :global(.popup-actions) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.375rem;
-    margin-top: 0.625rem;
-  }
-
-  :global(.popup-btn) {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.25rem 0.625rem;
-    border-radius: 6px;
-    border: 1px solid #e4e4e7;
-    font-family: var(--font-mono, monospace);
-    font-size: 0.625rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    text-decoration: none;
-    color: #52525b;
-    background: transparent;
-    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-    white-space: nowrap;
-  }
-
-  :global(.popup-btn--listing:hover) { background: var(--color-accent, #00b37e); color: #fff; border-color: var(--color-accent, #00b37e); }
-  :global(.popup-btn--zillow:hover)  { background: #006aff; color: #fff; border-color: #006aff; }
-  :global(.popup-btn--maps:hover)    { background: #ea4335; color: #fff; border-color: #ea4335; }
-  :global(.popup-btn--registry:hover){ background: #1a7340; color: #fff; border-color: #1a7340; }
-
-  :global([data-theme='dark'] .popup-btn) {
-    border-color: #3f3f46;
-    color: #a1a1aa;
-  }
-
-  :global([data-theme='dark'] .auction-popup .maplibregl-popup-content) {
-    background: #18181b;
-    border-color: #27272a;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  }
-  :global([data-theme='dark'] .auction-popup .maplibregl-popup-tip) { border-top-color: #18181b; }
-  :global([data-theme='dark'] .popup-address) { color: #fafafa; }
-  :global([data-theme='dark'] .popup-chip)    { background: #27272a; color: #a1a1aa; }
-  :global([data-theme='dark'] .popup-source)  { color: #52525b; }
-</style>

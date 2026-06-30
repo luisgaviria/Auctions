@@ -146,39 +146,43 @@ async function ensureMapMounted(): Promise<void> {
 
 // ── View toggle ────────────────────────────────────────────────────────────────
 export async function setView(showMap: boolean): Promise<void> {
-  state.isMapView = showMap;
-  const gridView = document.getElementById('grid-view');
-  const mapSplit = document.getElementById('map-split');
-  const label    = document.getElementById('toggle-label');
+  const toggleDOM = async () => {
+    state.isMapView = showMap;
+    const gridView = document.getElementById('grid-view');
+    const mapSplit = document.getElementById('map-split');
+    const label    = document.getElementById('toggle-label');
+    const auctionsPage = document.getElementById('auctions-page');
 
-  const auctionsPage = document.getElementById('auctions-page');
+    if (showMap) {
+      if (auctionsPage) auctionsPage.style.display = 'none';
+      if (gridView) gridView.style.display = 'none';
+      if (mapSplit) mapSplit.style.display = 'flex';
+      document.getElementById('toggle-use')?.setAttribute('href', '#icon-th');
+      if (label)    label.textContent = 'Grid View';
 
-  if (showMap) {
-    if (auctionsPage) auctionsPage.style.display = 'none';
-    if (gridView) gridView.style.display = 'none';
-    if (mapSplit) mapSplit.style.display = 'flex';
-    document.getElementById('toggle-use')?.setAttribute('href', '#icon-th');
-    if (label)    label.textContent = 'Grid View';
+      populateMapCards(state.currentMapAuctions ?? state.allAuctions);
+      checkFavoriteStatus();
+      state.mapViewInitialised = true;
 
-    populateMapCards(state.currentMapAuctions ?? state.allAuctions);
-    checkFavoriteStatus();
-    state.mapViewInitialised = true;
+      const mapBtn = document.getElementById('map-load-more-btn');
+      if (mapBtn) mapBtn.style.display = state.hasMore ? '' : 'none';
 
-    const mapBtn = document.getElementById('map-load-more-btn');
-    if (mapBtn) mapBtn.style.display = state.hasMore ? '' : 'none';
+      await ensureMapMounted();
+      setTimeout(() => {
+        document.querySelector('.map-container')?.dispatchEvent(new CustomEvent('resizemap'));
+      }, 50);
+    } else {
+      if (mapSplit) mapSplit.style.display = 'none';
+      if (auctionsPage) auctionsPage.style.display = '';
+      if (gridView) gridView.style.display = '';
+      document.getElementById('toggle-use')?.setAttribute('href', '#icon-map');
+      if (label)    label.textContent = 'Map View';
+    }
+  };
 
-    // Mount the Svelte component (no-op after first call), then signal the
-    // map canvas to resize. The 50 ms delay gives Svelte's onMount time to
-    // register the resizemap event listener before we fire it.
-    await ensureMapMounted();
-    setTimeout(() => {
-      document.querySelector('.map-container')?.dispatchEvent(new CustomEvent('resizemap'));
-    }, 50);
+  if (document.startViewTransition) {
+    document.startViewTransition(() => toggleDOM());
   } else {
-    if (mapSplit) mapSplit.style.display = 'none';
-    if (auctionsPage) auctionsPage.style.display = '';
-    if (gridView) gridView.style.display = '';
-    document.getElementById('toggle-use')?.setAttribute('href', '#icon-map');
-    if (label)    label.textContent = 'Show Map';
+    toggleDOM();
   }
 }

@@ -4,14 +4,10 @@ import { checkFavoriteStatus } from './favorites';
 import { appendMapCards } from './map-view';
 import { showToast } from './toast';
 
-// todayET returns today's date in America/New_York as a "YYYY-MM-DD" string.
 function todayET(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 
-// filterPastAuctions is a client-side safety net that removes auctions whose
-// date has already passed in Eastern Time.  The API should already exclude
-// them, but this guard prevents stale cached responses from reaching the UI.
 function filterPastAuctions(list: any[]): any[] {
   const today = todayET();
   return list.filter((a) => {
@@ -30,6 +26,12 @@ export async function loadMore(triggerBtn: HTMLButtonElement): Promise<void> {
   triggerBtn.textContent = 'Loading…';
   triggerBtn.disabled    = true;
 
+  const topLoader = document.getElementById('top-loader');
+  if (topLoader) {
+    topLoader.classList.remove('done');
+    topLoader.classList.add('loading');
+  }
+
   try {
     const searchParam = state.search ? `&search=${encodeURIComponent(state.search)}` : '';
     const response = await fetch(`${state.apiUrl}/auctions?limit=${state.LIMIT}&offset=${state.offset}${searchParam}`);
@@ -38,11 +40,33 @@ export async function loadMore(triggerBtn: HTMLButtonElement): Promise<void> {
     const newAuctions: any[] = filterPastAuctions(data.auctions || []);
 
     const grid = document.getElementById('auctions-grid');
+    const newElements: HTMLElement[] = [];
+
     newAuctions.forEach((a: any) => {
       const temp = document.createElement('div');
       temp.innerHTML = createCardHTML(a).trim();
-      if (temp.firstElementChild) grid?.appendChild(temp.firstElementChild);
+      const el = temp.firstElementChild as HTMLElement | null;
+      if (el && grid) {
+        el.style.opacity = '0';
+        el.style.transform = 'translateX(40px)';
+        el.style.transition = 'none';
+        grid.appendChild(el);
+        newElements.push(el);
+      }
     });
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        newElements.forEach((el, i) => {
+          el.style.transition = `opacity 0.5s cubic-bezier(0.16,1,0.3,1) ${i * 70}ms, transform 0.5s cubic-bezier(0.16,1,0.3,1) ${i * 70}ms`;
+          el.style.opacity = '1';
+          el.style.transform = 'translateX(0)';
+          el.classList.add('revealed');
+        });
+      });
+    });
+
+    document.dispatchEvent(new CustomEvent('auctioncardsadded'));
 
     if (state.mapViewInitialised) appendMapCards(newAuctions);
 
@@ -65,6 +89,10 @@ export async function loadMore(triggerBtn: HTMLButtonElement): Promise<void> {
     if (state.hasMore) {
       triggerBtn.textContent = origText;
       triggerBtn.disabled    = false;
+    }
+    if (topLoader) {
+      topLoader.classList.add('done');
+      setTimeout(() => topLoader.classList.remove('loading', 'done'), 400);
     }
   }
 }

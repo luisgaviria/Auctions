@@ -59,9 +59,9 @@ var selectAuctionsInBounds = `
 		'past', '3rd party purchase', 'postponed'
 	)
 	AND (date >= (CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York')::date OR date IS NULL)
-	AND lat != '0' AND lng != '0'
-	AND lat::float8 BETWEEN $1 AND $2
-	AND lng::float8 BETWEEN $3 AND $4
+	AND lat != 0 AND lng != 0
+	AND lat BETWEEN $1 AND $2
+	AND lng BETWEEN $3 AND $4
 	ORDER BY date ASC NULLS LAST, time ASC NULLS LAST
 	LIMIT 200`
 

@@ -30,9 +30,6 @@ export function createCardHTML(auction: any): string {
       : '';
   const auctioneerHtml = siteName ? `<span class="auctioneer-label">${siteName}</span>` : '';
 
-  // Research buttons must be <button>, NOT <a>, because nesting <a> inside
-  // the outer auction-card <a> is invalid HTML — the browser auto-closes the
-  // outer anchor, breaking the entire card structure.
   const safeOpen = (url: string) =>
     `event.stopPropagation();window.open('${url.replace(/'/g, "\\'")}','_blank','noopener,noreferrer')`;
 
