@@ -19,6 +19,7 @@ import (
 	"backendAuction/utils"
 	"context"
 	"database/sql"
+	"errors"
 	"log"
 	"os"
 	"time"
@@ -35,9 +36,9 @@ func main() {
 		}
 	}
 
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		log.Fatal("DATABASE_URL not set")
+	dbURL, err := getDatabaseURL()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	db, err := sql.Open("postgres", dbURL)
@@ -56,4 +57,12 @@ func main() {
 	defer cancel()
 
 	utils.RunGeocodeWorker(ctx, db)
+}
+
+func getDatabaseURL() (string, error) {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		return "", errors.New("DATABASE_URL not set")
+	}
+	return dbURL, nil
 }

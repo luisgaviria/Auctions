@@ -35,13 +35,7 @@ func main() {
 	}
 	// Append a driver-level connect_timeout so the TCP+SSL handshake itself
 	// cannot block indefinitely (distinct from the context deadline below).
-	if !strings.Contains(dbURL, "connect_timeout") {
-		sep := "?"
-		if strings.Contains(dbURL, "?") {
-			sep = "&"
-		}
-		dbURL += sep + "connect_timeout=15"
-	}
+	dbURL = withConnectTimeout(dbURL)
 
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -130,4 +124,15 @@ func main() {
 	} else {
 		log.Printf("OK: %d total auction rows in Supabase across %d sites", grand, len(totals))
 	}
+}
+
+func withConnectTimeout(dbURL string) string {
+	if strings.Contains(dbURL, "connect_timeout") {
+		return dbURL
+	}
+	sep := "?"
+	if strings.Contains(dbURL, "?") {
+		sep = "&"
+	}
+	return dbURL + sep + "connect_timeout=15"
 }

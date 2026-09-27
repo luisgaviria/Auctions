@@ -183,7 +183,7 @@ func (s *AuctionsService) GetAuctionsBySlug(countySlug, citySlug string) ([]byte
 
 	log.Printf("[slug] summary query county=%q city=%q", countySlug, citySlug)
 
-	var cityName string
+	var cityName sql.NullString
 	var count int
 	var avgDeposit sql.NullFloat64
 
@@ -194,7 +194,7 @@ func (s *AuctionsService) GetAuctionsBySlug(countySlug, citySlug string) ([]byte
 	}
 
 	log.Printf("[slug] summary result county=%q city=%q count=%d avg_deposit=%v city_name=%q",
-		countySlug, citySlug, count, avgDeposit, cityName)
+		countySlug, citySlug, count, avgDeposit, cityName.String)
 
 	if count == 0 {
 		// Run a diagnostic query to distinguish "slugs don't exist" from
@@ -218,7 +218,7 @@ func (s *AuctionsService) GetAuctionsBySlug(countySlug, citySlug string) ([]byte
 	countyDisplay := slugToDisplay(countySlug)
 
 	summary := CityMarketSummary{
-		City:           cityName,
+		City:           cityName.String,
 		County:         countyDisplay,
 		AuctionCount:   count,
 		AverageDeposit: avgDepositStr,
