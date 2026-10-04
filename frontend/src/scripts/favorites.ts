@@ -1,5 +1,6 @@
 import { state } from './state';
 import { showToast } from './toast';
+import type { AuctionsResponse } from '../types/api';
 
 export async function checkFavoriteStatus(): Promise<void> {
   if (!localStorage.getItem('jwt_token')) return;
@@ -9,8 +10,8 @@ export async function checkFavoriteStatus(): Promise<void> {
       credentials: 'include',
     });
     if (!response.ok) return;
-    const data = await response.json();
-    const favoriteIds = new Set<number>((data.auctions || []).map((a: any) => a.id));
+    const data = await response.json() as AuctionsResponse;
+    const favoriteIds = new Set<number>(data.auctions.map((auction) => auction.id));
     document.querySelectorAll<HTMLElement>('.favorite-btn').forEach(btn => {
       const id = parseInt(btn.dataset.auctionId ?? '', 10);
       const useEl = btn.querySelector('use');

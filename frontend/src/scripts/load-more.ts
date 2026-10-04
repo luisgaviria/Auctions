@@ -3,12 +3,13 @@ import { createCardHTML } from './card';
 import { checkFavoriteStatus } from './favorites';
 import { appendMapCards } from './map-view';
 import { showToast } from './toast';
+import type { Auction, AuctionsResponse } from '../types/api';
 
 function todayET(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 
-function filterPastAuctions(list: any[]): any[] {
+function filterPastAuctions(list: Auction[]): Auction[] {
   const today = todayET();
   return list.filter((a) => {
     if (!a.date) return true;
@@ -36,13 +37,13 @@ export async function loadMore(triggerBtn: HTMLButtonElement): Promise<void> {
     const searchParam = state.search ? `&search=${encodeURIComponent(state.search)}` : '';
     const response = await fetch(`${state.apiUrl}/auctions?limit=${state.LIMIT}&offset=${state.offset}${searchParam}`);
     if (!response.ok) throw new Error('Server error');
-    const data        = await response.json();
-    const newAuctions: any[] = filterPastAuctions(data.auctions || []);
+    const data        = await response.json() as AuctionsResponse;
+    const newAuctions = filterPastAuctions(data.auctions);
 
     const grid = document.getElementById('auctions-grid');
     const newElements: HTMLElement[] = [];
 
-    newAuctions.forEach((a: any) => {
+    newAuctions.forEach((a) => {
       const temp = document.createElement('div');
       temp.innerHTML = createCardHTML(a).trim();
       const el = temp.firstElementChild as HTMLElement | null;

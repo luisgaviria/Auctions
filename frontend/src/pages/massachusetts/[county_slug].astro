@@ -2,13 +2,12 @@
 import '../../styles/countySlug.css';
 import Layout from '../../layouts/Layout.astro';
 import Breadcrumb from '../../components/Breadcrumb.astro';
+import type { CountyCitiesResponse, CityRow } from '../../types/api';
 
 export const prerender = false;
 
 const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 const { county_slug } = Astro.params;
-
-type CityRow = { city_slug: string; city: string; county_slug: string; auction_count: number };
 
 let countyDisplay = '';
 let cities: CityRow[] = [];
@@ -19,7 +18,7 @@ try {
     return Astro.redirect('/404', 302);
   }
   if (!res.ok) throw new Error(`API ${res.status}`);
-  const data = await res.json();
+  const data = await res.json() as CountyCitiesResponse;
   countyDisplay = data.county ?? '';
   cities = data.cities ?? [];
 } catch (_) {

@@ -1,9 +1,10 @@
 ---
 import '../styles/auctionGrid.css';
 import Card from './Card.astro';
+import type { Auction } from '../types/api';
 
 interface Props {
-  auctions: any[];
+  auctions: Auction[];
   hasMore: boolean;
 }
 const { auctions, hasMore } = Astro.props;
@@ -18,7 +19,7 @@ const { auctions, hasMore } = Astro.props;
         <p>There are currently no auctions listed. Please check back later.</p>
       </div>
     ) : (
-      auctions.map((auction: any) => (
+      auctions.map((auction) => (
         <Card
           id={auction.id}
           link={auction.link}

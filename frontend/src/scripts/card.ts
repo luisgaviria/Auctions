@@ -1,3 +1,5 @@
+import type { AuctionCardData } from '../types/api';
+
 export function getStatusCategory(s: string): 'active' | 'postponed' | 'muted' {
   const lower = (s || '').toLowerCase();
   if (lower.includes('postponed')) return 'postponed';
@@ -14,7 +16,7 @@ export function formatSiteName(s: string): string {
     .join(' ');
 }
 
-export function createCardHTML(auction: any): string {
+export function createCardHTML(auction: AuctionCardData): string {
   const date = auction.date || '—';
   const time = auction.time || '';
   const deposit = auction.deposit || '—';

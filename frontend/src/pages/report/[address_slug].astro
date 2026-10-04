@@ -2,48 +2,20 @@
 import '../../styles/addressSlug.css';
 import Layout from '../../layouts/Layout.astro';
 import Breadcrumb from '../../components/Breadcrumb.astro';
+import type { AuctionReport } from '../../types/api';
 
 export const prerender = false;
 
 const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 const { address_slug } = Astro.params;
 
-type ChecklistItem = { task: string; category: string };
-
-type Report = {
-  auction: {
-    id: number;
-    address: string;
-    city: string;
-    state: string;
-    date: string;
-    time: string;
-    deposit: string;
-    status: string;
-    site_name: string;
-    link: string;
-    logo: string;
-    zillow_url: string;
-    street_view_url: string;
-    registry_url: string;
-    registry_deep_link?: string;
-    registry_book?: number;
-    registry_page?: number;
-    assessor_pid?: string;
-  };
-  checklist: ChecklistItem[];
-  share_url: string;
-  address_slug: string;
-  assessor_url?: string;
-};
-
-let report: Report | null = null;
+let report: AuctionReport | null = null;
 
 try {
   const res = await fetch(`${apiUrl}/report/${address_slug}`);
   if (res.status === 404) return Astro.redirect('/404', 302);
   if (!res.ok) throw new Error(`API ${res.status}`);
-  report = await res.json();
+  report = await res.json() as AuctionReport;
 } catch (_) {
   return new Response(null, { status: 502, statusText: 'Bad Gateway' });
 }
@@ -65,7 +37,7 @@ const crumbs = [
 
 // Group checklist items by category preserving first-seen order.
 const categories: string[] = [];
-const grouped: Record<string, ChecklistItem[]> = {};
+const grouped: Record<string, AuctionReport['checklist']> = {};
 for (const item of checklist) {
   if (!grouped[item.category]) {
     categories.push(item.category);

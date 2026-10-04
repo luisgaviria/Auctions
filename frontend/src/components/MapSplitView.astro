@@ -1,7 +1,9 @@
 ---
 import '../styles/mapSplitView.css';
+import type { Auction } from '../types/api';
+
 interface Props {
-  auctions: any[];
+  auctions: Auction[];
   hasMore: boolean;
   apiUrl: string;
 }

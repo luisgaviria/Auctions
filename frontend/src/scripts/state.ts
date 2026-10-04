@@ -1,13 +1,15 @@
+import type { Auction } from '../types/api';
+
 export interface PageState {
   apiUrl: string;
   LIMIT: number;
-  allAuctions: any[];
+  allAuctions: Auction[];
   offset: number;
   hasMore: boolean;
   loading: boolean;
   isMapView: boolean;
   mapViewInitialised: boolean;
-  currentMapAuctions: any[] | null;
+  currentMapAuctions: Auction[] | null;
   search: string;
 }
 
@@ -32,7 +34,7 @@ export function initState(): void {
   state.LIMIT   = parseInt(el.dataset.limit ?? '20', 10);
   state.hasMore = el.dataset.hasMore === 'true';
   try {
-    state.allAuctions = JSON.parse(el.dataset.initialAuctions ?? '[]');
+    state.allAuctions = JSON.parse(el.dataset.initialAuctions ?? '[]') as Auction[];
   } catch {
     state.allAuctions = [];
   }

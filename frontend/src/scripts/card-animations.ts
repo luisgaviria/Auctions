@@ -1,5 +1,13 @@
 
 
+export {};
+
+declare global {
+  interface Window {
+    __cardTiltInit?: boolean;
+  }
+}
+
 function initCardAnimations() {
   // ── Scroll-reveal with staggered delay ──────────────────────────────
   const observer = new IntersectionObserver((entries) => {
@@ -23,8 +31,8 @@ function initCardAnimations() {
   document.addEventListener('auctioncardsadded', observeCards);
 
   // ── 3D tilt + spotlight glow (only register once globally) ─────────
-  if (!(window as any).__cardTiltInit) {
-    (window as any).__cardTiltInit = true;
+  if (!window.__cardTiltInit) {
+    window.__cardTiltInit = true;
 
     const MAX_TILT = 6;
     let activeCard: HTMLElement | null = null;

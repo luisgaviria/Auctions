@@ -1,3 +1,5 @@
+import type { AuctionCardData, AuctionsResponse } from '../types/api';
+
 function getStatusCategory(s: string): 'active' | 'postponed' | 'muted' {
   const lower = (s || '').toLowerCase();
   if (lower.includes('postponed')) return 'postponed';
@@ -19,7 +21,7 @@ function getApiUrl(): string {
   return el?.dataset.apiUrl ?? '';
 }
 
-function createFavoriteCardHTML(auction: any): string {
+function createFavoriteCardHTML(auction: AuctionCardData): string {
   const date = auction.date || '—';
   const time = auction.time || '';
   const deposit = auction.deposit || '—';
@@ -105,7 +107,7 @@ async function loadFavorites(): Promise<void> {
 
     if (!response.ok) throw new Error('Failed to load favorites');
 
-    const data = await response.json();
+    const data = await response.json() as AuctionsResponse;
 
     if (data.auctions.length === 0) {
       container.innerHTML = `

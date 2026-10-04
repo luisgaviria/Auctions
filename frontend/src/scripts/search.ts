@@ -3,6 +3,7 @@ import { createCardHTML } from './card';
 import { checkFavoriteStatus } from './favorites';
 import { appendMapCards, clearMapCards } from './map-view';
 import { showToast } from './toast';
+import type { Auction, AuctionsResponse } from '../types/api';
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -10,7 +11,7 @@ function todayET(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 
-function filterPast(list: any[]): any[] {
+function filterPast(list: Auction[]): Auction[] {
   const today = todayET();
   return list.filter(a => {
     if (!a.date) return true;
@@ -39,8 +40,8 @@ async function runSearch(query: string): Promise<void> {
 
     const res = await fetch(url);
     if (!res.ok) throw new Error('Server error');
-    const data = await res.json();
-    const auctions: any[] = filterPast(data.auctions || []);
+    const data = await res.json() as AuctionsResponse;
+    const auctions = filterPast(data.auctions);
 
     // Replace grid content.
     if (grid) {

@@ -1,28 +1,30 @@
-<script>
+<script lang="ts">
   import '../styles/map.css';
   import { onMount, onDestroy } from 'svelte';
+  import type { Auction, AuctionsResponse } from '../types/api';
+  import type { Map as MapLibreMap, Marker, Popup } from 'maplibre-gl';
   // `?url` tells Vite to copy the file to the build output and give us the hashed
   // URL as a string — without injecting the CSS into the page automatically.
   // We inject the <link> tag lazily in onMount so it never blocks the initial load.
   import maplibreCssUrl from 'maplibre-gl/dist/maplibre-gl.css?url';
 
-  export let auctions = [];
-  export let apiUrl = '';
+  export let auctions: Auction[] = [];
+  export let apiUrl: string = '';
 
   const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_API_KEY;
 
-  let mapContainer;
-  let map = null;
+  let mapContainer: HTMLDivElement;
+  let map: MapLibreMap | null = null;
   // Populated by the dynamic import inside onMount — null until first activation.
-  let maplibregl = null;
+  let maplibregl: typeof import('maplibre-gl').default | null = null;
   // Each entry: { id, marker, lngLat, popup }
-  let markers = [];
-  let activePopup = null;
+  let markers: { id: number; marker: Marker; lngLat: [number, number]; popup: Popup }[] = [];
+  let activePopup: Popup | null = null;
   let hasMoved = false;
   let searching = false;
-  let currentBounds = null;
+  let currentBounds: { north: number; south: number; east: number; west: number } | null = null;
 
-  function formatSiteName(s) {
+  function formatSiteName(s: string): string {
     if (!s) return '';
     return s.replace(/([a-z])([A-Z])/g, '$1 $2')
       .split(/[\s_-]+/)
@@ -30,25 +32,27 @@
       .join(' ');
   }
 
-  function validCoord(a) {
+  function validCoord(a: Auction): boolean {
     const lat = parseFloat(a.lat), lng = parseFloat(a.lng);
     return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
   }
 
-  function clearMarkers() {
+  function clearMarkers(): void {
     markers.forEach(({ marker }) => marker.remove());
     markers = [];
     if (activePopup) { activePopup.remove(); activePopup = null; }
   }
 
-  function renderMarkers(auctionList) {
+  function renderMarkers(auctionList: Auction[]): void {
     if (!map || !maplibregl) return;
+    const mapInstance = map;
+    const mapLibrary = maplibregl;
     clearMarkers();
 
     auctionList.filter(validCoord).forEach(auction => {
       const lat = parseFloat(auction.lat);
       const lng = parseFloat(auction.lng);
-      const lngLat = [lng, lat];
+      const lngLat: [number, number] = [lng, lat];
 
       const el = document.createElement('div');
       el.className = 'map-marker';
@@ -60,7 +64,7 @@
         (auction.registry_deep_link || auction.registry_url) && `<a href="${auction.registry_deep_link || auction.registry_url}" target="_blank" rel="noopener noreferrer" class="popup-btn popup-btn--registry">Registry</a>`,
       ].filter(Boolean).join('');
 
-      const popup = new maplibregl.Popup({
+      const popup = new mapLibrary.Popup({
         offset: 18,
         closeButton: false,
         maxWidth: '280px',
@@ -81,11 +85,11 @@
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         // Always fly to the tapped marker so it's centred on screen.
-        map.flyTo({ center: lngLat, zoom: Math.max(map.getZoom(), 14), duration: 500 });
+        mapInstance.flyTo({ center: lngLat, zoom: Math.max(mapInstance.getZoom(), 14), duration: 500 });
 
         // Always show the beautiful MapLibre popup regardless of screen size
         if (activePopup) activePopup.remove();
-        popup.setLngLat(lngLat).addTo(map);
+        popup.setLngLat(lngLat).addTo(mapInstance);
         activePopup = popup;
 
         // Notify the sidebar/sheet — include the full auction object so the
@@ -96,15 +100,16 @@
         }));
       });
 
-      const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+      const marker = new mapLibrary.Marker({ element: el, anchor: 'center' })
         .setLngLat(lngLat)
-        .addTo(map);
+        .addTo(mapInstance);
 
       markers.push({ id: auction.id, marker, lngLat, popup });
     });
   }
 
-  function onUserMoveEnd() {
+  function onUserMoveEnd(): void {
+    if (!map) return;
     const b = map.getBounds();
     currentBounds = {
       north: b.getNorth(),
@@ -115,7 +120,7 @@
     hasMoved = true;
   }
 
-  async function searchArea() {
+  async function searchArea(): Promise<void> {
     if (!currentBounds || searching) return;
     searching = true;
     hasMoved = false;
@@ -126,8 +131,8 @@
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const newAuctions = data.auctions ?? [];
+      const data = await res.json() as AuctionsResponse;
+      const newAuctions = data.auctions;
 
       renderMarkers(newAuctions);
 
@@ -157,7 +162,8 @@
     });
 
     // ── Dynamic import (separate Vite chunk, only fetched on demand) ───────────
-    maplibregl = (await import('maplibre-gl')).default;
+    const mapLibrary = (await import('maplibre-gl')).default;
+    maplibregl = mapLibrary;
 
     // ── Inject MapLibre CSS lazily ─────────────────────────────────────────────
     // maplibreCssUrl is a Vite ?url import: the file is in the build output but
@@ -193,16 +199,17 @@
           }]
         };
 
-    map = new maplibregl.Map({
+    const mapInstance = new mapLibrary.Map({
       container: mapContainer,
       style: mapStyle,
       center: [-71.0589, 42.3601],
       zoom: 7,
       attributionControl: false
     });
-    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    map = mapInstance;
+    mapInstance.addControl(new mapLibrary.NavigationControl(), 'top-right');
 
-    map.on('load', () => {
+    mapInstance.on('load', () => {
       renderMarkers(auctions);
 
       const valid = auctions.filter(validCoord);
@@ -212,7 +219,7 @@
         map.flyTo({ center: [parseFloat(valid[0].lng), parseFloat(valid[0].lat)], zoom: 14 });
         didFit = true;
       } else if (valid.length > 1) {
-        const bounds = new maplibregl.LngLatBounds();
+        const bounds = new mapLibrary.LngLatBounds();
         valid.forEach(a => bounds.extend([parseFloat(a.lng), parseFloat(a.lat)]));
         map.fitBounds(bounds, { padding: 60, maxZoom: 14 });
         didFit = true;
@@ -221,7 +228,7 @@
       // After the initial fit animation settles, auto-search the visible viewport
       // so the sidebar is populated immediately.  Then register the user-move tracker.
       function initialSearch() {
-        const b = map.getBounds();
+        const b = mapInstance.getBounds();
         currentBounds = {
           north: b.getNorth(),
           south: b.getSouth(),
@@ -229,18 +236,18 @@
           west:  b.getWest(),
         };
         searchArea();
-        map.on('moveend', onUserMoveEnd);
+        mapInstance.on('moveend', onUserMoveEnd);
       }
 
       if (didFit) {
-        map.once('moveend', initialSearch);
+        mapInstance.once('moveend', initialSearch);
       } else {
         initialSearch();
       }
     });
 
-    map.on('click', (e) => {
-      if (!e.originalEvent.target.closest('.map-marker')) {
+    mapInstance.on('click', (e) => {
+      if (!(e.originalEvent.target as Element | null)?.closest('.map-marker')) {
         if (activePopup) { activePopup.remove(); activePopup = null; }
         // On mobile, dismiss the carousel when tapping the map background.
         if (window.innerWidth < 768) {
@@ -250,28 +257,30 @@
     });
 
     // Subsequent resizemap events (user toggles back to map view after closing it).
-    mapContainer.addEventListener('resizemap', () => map && map.resize());
+    mapContainer.addEventListener('resizemap', () => mapInstance.resize());
 
     // 'flytomarker' is dispatched by the sidebar card click handler in index.astro.
-    mapContainer.addEventListener('flytomarker', (e) => {
-      const entry = markers.find(m => m.id === e.detail.id);
+    mapContainer.addEventListener('flytomarker', (event) => {
+      const { id } = (event as CustomEvent<{ id: number }>).detail;
+      const entry = markers.find(m => m.id === id);
       if (!entry) return;
 
       if (activePopup) { activePopup.remove(); activePopup = null; }
 
-      map.flyTo({ center: entry.lngLat, zoom: 15, duration: 700 });
-      map.once('moveend', () => {
-        entry.popup.setLngLat(entry.lngLat).addTo(map);
+      mapInstance.flyTo({ center: entry.lngLat, zoom: 15, duration: 700 });
+      mapInstance.once('moveend', () => {
+        entry.popup.setLngLat(entry.lngLat).addTo(mapInstance);
         activePopup = entry.popup;
       });
     });
 
     // 'pantomarker' is dispatched by the carousel scroll handler — pan the map
     // to centre a marker without opening its popup (no flyTo zoom change).
-    mapContainer.addEventListener('pantomarker', (e) => {
-      const entry = markers.find(m => m.id === e.detail.id);
+    mapContainer.addEventListener('pantomarker', (event) => {
+      const { id } = (event as CustomEvent<{ id: number }>).detail;
+      const entry = markers.find(m => m.id === id);
       if (!entry) return;
-      map.easeTo({ center: entry.lngLat, duration: 300 });
+      mapInstance.easeTo({ center: entry.lngLat, duration: 300 });
     });
   });
 

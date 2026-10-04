@@ -3,6 +3,7 @@ import '../../../styles/citySlug.css';
 import Layout from '../../../layouts/Layout.astro';
 import Card from '../../../components/Card.astro';
 import Breadcrumb from '../../../components/Breadcrumb.astro';
+import type { CityMarketResponse, CityRow } from '../../../types/api';
 
 // Pre-render the top 50 most active cities at build time.
 // Any slug pair not in this list falls through to SSR on first request,
@@ -13,15 +14,7 @@ const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 const { county_slug, city_slug } = Astro.params;
 
 // ── Fetch market data ──────────────────────────────────────────────────────
-let market: {
-  summary: {
-    city: string;
-    county: string;
-    auction_count: number;
-    average_deposit: string;
-  };
-  auctions: any[];
-} | null = null;
+let market: CityMarketResponse | null = null;
 
 try {
   const res = await fetch(`${apiUrl}/auctions/${county_slug}/${city_slug}`);
@@ -29,7 +22,7 @@ try {
     return Astro.redirect('/404', 302);
   }
   if (!res.ok) throw new Error(`API ${res.status}`);
-  market = await res.json();
+  market = await res.json() as CityMarketResponse;
 } catch (e) {
   // Network / unexpected error — show a graceful error rather than crashing.
   return new Response(null, { status: 502, statusText: 'Bad Gateway' });
@@ -38,12 +31,11 @@ try {
 const { summary, auctions } = market!;
 
 // ── Related markets (same county, other cities) ────────────────────────────
-type CityRow = { city_slug: string; city: string; county_slug: string; auction_count: number };
 let relatedCities: CityRow[] = [];
 try {
   const relRes = await fetch(`${apiUrl}/locations/counties/${county_slug}/cities`);
   if (relRes.ok) {
-    const relData = await relRes.json();
+    const relData = await relRes.json() as { cities: CityRow[] };
     relatedCities = (relData.cities ?? [])
       .filter((c: CityRow) => c.city_slug !== city_slug)
       .slice(0, 5);
@@ -104,7 +96,7 @@ const crumbs = [
         </div>
       ) : (
         <div class="card-grid">
-          {auctions.map((a: any) => (
+          {auctions.map((a) => (
             <Card
               id={a.id}
               link={a.link}

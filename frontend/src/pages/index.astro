@@ -5,15 +5,16 @@ import AuctionGrid from '../components/AuctionGrid.astro';
 import MapSplitView from '../components/MapSplitView.astro';
 import ViewToggle from '../components/ViewToggle.astro';
 import axios, { AxiosError } from 'axios';
+import type { Auction, AuctionsResponse } from '../types/api';
 
 const LIMIT = 20;
 const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
-let auctions: any[] = [];
+let auctions: Auction[] = [];
 let error: string | null = null;
 
 try {
   console.log('Fetching auctions from:', apiUrl);
-  const response = await axios.get(`${apiUrl}/auctions?limit=${LIMIT}&offset=0`, {
+  const response = await axios.get<AuctionsResponse>(`${apiUrl}/auctions?limit=${LIMIT}&offset=0`, {
     headers: { 'Content-Type': 'application/json' },
   });
   // The backend API already filters out past auctions using the America/New_York timezone

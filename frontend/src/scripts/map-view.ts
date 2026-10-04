@@ -1,6 +1,8 @@
 import { state } from './state';
 import { createCardHTML } from './card';
 import { checkFavoriteStatus } from './favorites';
+import type { Component } from 'svelte';
+import type { Auction } from '../types/api';
 
 function setContents(container: HTMLElement | null, html: string): void {
   if (!container) return;
@@ -10,7 +12,7 @@ function setContents(container: HTMLElement | null, html: string): void {
   container.scrollTop = 0;
 }
 
-export function populateMapCards(auctionList: any[]): void {
+export function populateMapCards(auctionList: Auction[]): void {
   const mapList = document.getElementById('map-card-list');
   if (!mapList) return;
 
@@ -79,13 +81,13 @@ function buildDots(_carousel: HTMLElement, track: HTMLElement, count: number): v
   };
 }
 
-export function showMarkerCarousel(tappedAuction: any): void {
+export function showMarkerCarousel(tappedAuction: Auction): void {
   const carousel = document.getElementById('marker-card-carousel');
   const track = document.getElementById('carousel-track');
   if (!carousel || !track) return;
 
   // Gather all current map auctions; put tapped one first
-  const pool: any[] = state.currentMapAuctions ?? state.allAuctions ?? [];
+  const pool = state.currentMapAuctions ?? state.allAuctions;
   const others = pool.filter(a => a.id !== tappedAuction.id);
   const ordered = [tappedAuction, ...others.slice(0, 9)]; // max 10 slides
 
@@ -107,7 +109,7 @@ export function hideMarkerCarousel(): void {
   if (carouselScrollCleanup) { carouselScrollCleanup(); carouselScrollCleanup = null; }
 }
 
-export function appendMapCards(newAuctions: any[]): void {
+export function appendMapCards(newAuctions: Auction[]): void {
   const container = document.getElementById('map-card-list');
   if (!container) return;
   const temp = document.createElement('div');
@@ -135,7 +137,9 @@ async function ensureMapMounted(): Promise<void> {
   // Fetch both in parallel — Svelte runtime and the component chunk.
   const [{ mount }, { default: MapSvelte }] = await Promise.all([
     import('svelte'),
-    import('../components/Map.svelte') as Promise<{ default: any }>,
+    import('../components/Map.svelte') as Promise<{
+      default: Component<{ auctions: Auction[]; apiUrl: string }>;
+    }>,
   ]);
 
   mount(MapSvelte, {

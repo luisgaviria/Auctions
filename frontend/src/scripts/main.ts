@@ -3,6 +3,7 @@ import { checkFavoriteStatus, initFavoritesClickHandler } from './favorites';
 import { loadMore } from './load-more';
 import { initDrawer } from './drawer';
 import { populateMapCards, setView, showMarkerCarousel, hideMarkerCarousel } from './map-view';
+import type { Auction, AuctionResultsChangedDetail, MarkerClickDetail } from '../types/api';
 
 // Hydrate shared state from the hidden #page-config element before anything else.
 initState();
@@ -38,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Marker click → mobile: show carousel; desktop: scroll & highlight sidebar card.
   document.getElementById('split-right')?.addEventListener('markerclick', (e: Event) => {
-    const detail = (e as CustomEvent).detail;
+    const detail = (e as CustomEvent<MarkerClickDetail>).detail;
     const id = detail?.id;
     if (!id) return;
 
@@ -64,7 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Bbox search results → refresh sidebar cards.
   document.getElementById('split-right')?.addEventListener('auctionresultschange', (e: Event) => {
-    const newAuctions: any[] = (e as CustomEvent).detail?.auctions ?? [];
+    const detail = (e as CustomEvent<AuctionResultsChangedDetail>).detail;
+    const newAuctions: Auction[] = detail?.auctions ?? [];
     state.currentMapAuctions = newAuctions;
     populateMapCards(newAuctions);
     checkFavoriteStatus();

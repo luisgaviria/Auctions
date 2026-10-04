@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import type { Auction, AuctionsResponse, TopCitySlugsResponse } from '../types/api';
 
 const SITE = 'https://auctionandcompany.com';
 const API  = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
@@ -7,6 +8,14 @@ const staticPages = [
   { path: '/',       changefreq: 'daily',   priority: '1.0' },
   { path: '/about',  changefreq: 'monthly', priority: '0.5' },
 ];
+
+function reportSlug(auction: Auction): string {
+  return `${auction.address} ${auction.city}`
+    .toLowerCase()
+    .replace(/[^a-z0-9 _-]/g, '')
+    .replace(/[ _-]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
 
 export const GET: APIRoute = async () => {
   const today = new Date().toISOString().split('T')[0];
@@ -25,7 +34,7 @@ export const GET: APIRoute = async () => {
   try {
     const res = await fetch(`${API}/auctions/slugs?limit=500`);
     if (res.ok) {
-      const { markets } = await res.json() as { markets: { county_slug: string; city_slug: string }[] };
+      const { markets } = await res.json() as TopCitySlugsResponse;
       cityUrls = markets.map(({ county_slug, city_slug }) => `
   <url>
     <loc>${SITE}/massachusetts/${county_slug}/${city_slug}</loc>
@@ -43,15 +52,16 @@ export const GET: APIRoute = async () => {
   try {
     const res = await fetch(`${API}/auctions?limit=500&offset=0`);
     if (res.ok) {
-      const { auctions } = await res.json() as { auctions: { address_slug?: string }[] };
+      const { auctions } = await res.json() as AuctionsResponse;
       const seen = new Set<string>();
       reportUrls = auctions
-        .filter(a => {
-          if (!a.address_slug || seen.has(a.address_slug)) return false;
-          seen.add(a.address_slug);
+        .map(reportSlug)
+        .filter(slug => {
+          if (!slug || seen.has(slug)) return false;
+          seen.add(slug);
           return true;
         })
-        .map(({ address_slug }) => `
+        .map(address_slug => `
   <url>
     <loc>${SITE}/report/${address_slug}</loc>
     <lastmod>${today}</lastmod>
