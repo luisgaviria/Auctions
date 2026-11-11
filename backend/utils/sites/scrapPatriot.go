@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -65,6 +66,7 @@ func ScrapPatriotWithCache(ctx context.Context, knownDeposits map[string]string)
 		listStatus    string
 	}
 	var items []listItem
+	var listingURLErr error
 
 	doc.Find("#calendar > div > a").Each(func(_ int, a *goquery.Selection) {
 		rawAddress := strings.TrimSpace(a.Find("h1").Text())
@@ -79,14 +81,22 @@ func ScrapPatriotWithCache(ctx context.Context, knownDeposits map[string]string)
 		href, _ := a.Attr("href")
 		var fullHref string
 		if strings.TrimSpace(href) != "" {
-			fullHref = patriotBase + href
+			var err error
+			fullHref, err = patriotResolveURL(href)
+			if err != nil {
+				listingURLErr = fmt.Errorf("patriot: resolve listing href %q: %w", href, err)
+				return
+			}
 		} else {
-			fullHref = patriotBase + "/auctions-in-massachusetts/"
+			fullHref = listURL
 		}
 
 		formattedDate, formattedTime := parseDateAndTimePatriot(rawDate)
 		items = append(items, listItem{rawAddress, formattedDate, formattedTime, fullHref, listStatus})
 	})
+	if listingURLErr != nil {
+		return nil, listingURLErr
+	}
 
 	// ── Pass 2: fetch detail pages via 10-worker pool ────────────────────────
 	type detailResult struct {
@@ -190,6 +200,20 @@ func ScrapPatriotWithCache(ctx context.Context, knownDeposits map[string]string)
 	}
 
 	return auctions, nil
+}
+
+func patriotResolveURL(href string) (string, error) {
+	base, err := url.Parse(patriotBase)
+	if err != nil {
+		return "", fmt.Errorf("parse Patriot base URL: %w", err)
+	}
+
+	reference, err := url.Parse(strings.TrimSpace(href))
+	if err != nil {
+		return "", fmt.Errorf("parse listing href: %w", err)
+	}
+
+	return base.ResolveReference(reference).String(), nil
 }
 
 // patriotDetailHTTPClient is a shared client for the plain-HTTP fast path.

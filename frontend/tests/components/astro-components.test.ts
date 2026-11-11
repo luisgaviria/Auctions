@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import Breadcrumb from '../../src/components/Breadcrumb.astro';
 import Card from '../../src/components/Card.astro';
 import ViewToggle from '../../src/components/ViewToggle.astro';
+import Layout from '../../src/layouts/Layout.astro';
 
 let container: Awaited<ReturnType<typeof AstroContainer.create>>;
 
@@ -107,5 +108,44 @@ describe('ViewToggle.astro', () => {
     expect(html).toContain('aria-label="Toggle map view"');
     expect(html).toContain('id="toggle-label">Show Map</span>');
     expect(html).toContain('href="#icon-map"');
+  });
+});
+
+describe('Layout.astro', () => {
+  it('renders page metadata, noindex directives, and slotted content', async () => {
+    const html = await container.renderToString(Layout, {
+      props: {
+        title: 'Boston',
+        description: 'Upcoming Boston auctions',
+        canonical: 'https://auctionandcompany.com/boston',
+        ogImage: 'https://auctionandcompany.com/boston-og.png',
+        noindex: true,
+      },
+      slots: { default: '<h1>Boston auctions</h1>' },
+    });
+
+    expect(html).toContain('<title>Boston | Auction &amp; Company</title>');
+    expect(html).toContain('<meta name="description" content="Upcoming Boston auctions">');
+    expect(html).toContain('<meta name="robots" content="noindex, nofollow">');
+    expect(html).toContain('<link rel="canonical" href="https://auctionandcompany.com/boston">');
+    expect(html).toContain(
+      '<meta property="og:image" content="https://auctionandcompany.com/boston-og.png">'
+    );
+    expect(html).toContain('<h1>Boston auctions</h1>');
+  });
+
+  it('uses the home title, default description, and indexable robots policy', async () => {
+    const html = await container.renderToString(Layout, {
+      props: { title: 'Auctions' },
+    });
+
+    expect(html).toContain(
+      '<title>Upcoming Property Auctions in Massachusetts | Auction &amp; Company</title>'
+    );
+    expect(html).toContain(
+      '<meta name="description" content="Browse upcoming real estate auctions in Massachusetts. Live bids, dates, deposits, and auctioneer details — updated daily.">'
+    );
+    expect(html).toContain('<meta name="robots" content="index, follow">');
+    expect(html).toContain('<meta property="og:image" content="https://example.com/og.png">');
   });
 });
