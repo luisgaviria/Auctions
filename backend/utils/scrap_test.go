@@ -1,10 +1,61 @@
 package utils
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	"backendAuction/utils/sites"
+
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 )
+
+func TestFinalizeScrapeSkipsSweepWhenSourcesAreIncomplete(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	err = finalizeScrape(
+		context.Background(),
+		db,
+		[]string{"baystate", "patriot"},
+		[]string{"baystate"},
+		[]string{"patriot"},
+	)
+	if err == nil || !strings.Contains(err.Error(), "scrape run partial") {
+		t.Fatalf("finalizeScrape() error = %v, want partial-run error", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unexpected database operation during partial run: %v", err)
+	}
+}
+
+func TestFinalizeScrapeSweepsOnlyAfterAllSourcesSucceed(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	mock.ExpectExec(`(?s)DELETE FROM auctions\s+WHERE site_name IN \(\$1, \$2\)\s+AND last_seen < NOW\(\) - INTERVAL '6 hours'`).
+		WithArgs("baystate", "patriot").
+		WillReturnResult(sqlmock.NewResult(0, 3))
+
+	if err := finalizeScrape(
+		context.Background(),
+		db,
+		[]string{"baystate", "patriot"},
+		[]string{"baystate", "patriot"},
+		nil,
+	); err != nil {
+		t.Fatalf("finalizeScrape() error = %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("expected scoped stale-auction sweep: %v", err)
+	}
+}
 
 func TestCleanStreetAddress(t *testing.T) {
 	tests := []struct {

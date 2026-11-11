@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 )
@@ -27,7 +28,9 @@ func (c *ScrapingController) StartScraping(w http.ResponseWriter, r *http.Reques
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 		defer cancel()
-		utils.ScrapAllSites(ctx, c.DB)
+		if err := utils.ScrapAllSites(ctx, c.DB); err != nil {
+			log.Printf("[scraping] run incomplete: %v", err)
+		}
 	}()
 
 	json.NewEncoder(w).Encode(ScrapingResponse{

@@ -8,6 +8,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -115,7 +117,7 @@ func aiRescueFetchHTML(ctx context.Context, siteName, url string) string {
 // Commonwealth, Patriot) sequentially, upserts results, then runs the cleanup
 // phase for those three sites. Used for verifying the CF migration without
 // triggering the full legacy scraper suite.
-func DryRunCFScrapers(ctx context.Context, db *sql.DB) {
+func DryRunCFScrapers(ctx context.Context, db *sql.DB) error {
 	migrateNonISODates(ctx, db)
 	purgePastAuctions(ctx, db)
 	backfillMissingURLs(ctx, db)
@@ -129,20 +131,27 @@ func DryRunCFScrapers(ctx context.Context, db *sql.DB) {
 
 	seen := make(map[string]bool)
 	var successfulSites []string
+	var failedSites []string
 	for _, def := range targets {
 		log.Printf("[dryrun] starting %s", def.name)
 		auctions, err := def.fn(ctx)
 		if err != nil {
 			log.Printf("[dryrun] %s FAILED: %v", def.name, err)
+			failedSites = append(failedSites, def.name)
 			continue
 		}
 		log.Printf("[dryrun] %s returned %d auctions", def.name, len(auctions))
+		if len(auctions) == 0 {
+			log.Printf("[dryrun] %s returned no auctions; treating source as incomplete", def.name)
+			failedSites = append(failedSites, def.name)
+			continue
+		}
 		for i := range auctions {
 			if auctions[i].SiteName == "" {
 				auctions[i].SiteName = def.name
 			}
 		}
-		successfulSites = append(successfulSites, def.name)
+		upsertFailed := false
 		for _, a := range auctions {
 			a = NormalizeAuction(a)
 			key := a.Street + "|" + a.SiteName
@@ -151,21 +160,33 @@ func DryRunCFScrapers(ctx context.Context, db *sql.DB) {
 				continue
 			}
 			seen[key] = true
-			upsertAuction(ctx, db, a)
+			if err := upsertAuction(ctx, db, a); err != nil {
+				log.Printf("[dryrun] %s upsert failed: %v", def.name, err)
+				upsertFailed = true
+			}
 		}
+		if upsertFailed {
+			failedSites = append(failedSites, def.name)
+			continue
+		}
+		successfulSites = append(successfulSites, def.name)
 	}
 
-	sweepStaleAuctions(ctx, db)
+	err := finalizeScrape(ctx, db, scraperNames(targets), successfulSites, failedSites)
+	if err != nil {
+		log.Printf("[dryrun] run incomplete: %v", err)
+		return err
+	}
 	log.Printf("[dryrun] complete")
+	return nil
 }
 
-// ScrapAllSites runs all 12 scrapers in parallel goroutines, streams results
-// into the database as each scraper finishes, then marks any auction that was
-// not seen in the last hour as status='Removed'.
+// ScrapAllSites runs all scrapers in parallel and only sweeps stale auctions
+// after every source has returned data and all upserts have succeeded.
 //
 // The context controls the overall timeout and propagates cancellation to all
 // Cloudflare HTTP calls and database queries.
-func ScrapAllSites(ctx context.Context, db *sql.DB) {
+func ScrapAllSites(ctx context.Context, db *sql.DB) error {
 	// Pre-scrape maintenance: fast DB-only operations, no external HTTP.
 	migrateNonISODates(ctx, db)
 	purgePastAuctions(ctx, db)
@@ -255,6 +276,7 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 	// successfulSites and seen need no mutex — only this goroutine writes them.
 	seen := make(map[string]bool)
 	var successfulSites []string
+	var failedSites []string
 	for res := range ch {
 		if res.err != nil {
 			log.Printf("[scraper] %s FAILED: %v", res.def.name, res.err)
@@ -267,6 +289,7 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 				}
 			}
 			if res.err != nil {
+				failedSites = append(failedSites, res.def.name)
 				continue
 			}
 		}
@@ -279,7 +302,12 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 				res.auctions = rescued
 			}
 		}
-		successfulSites = append(successfulSites, res.def.name)
+		if len(res.auctions) == 0 {
+			log.Printf("[scraper] %s returned no auctions after recovery; treating source as incomplete", res.def.name)
+			failedSites = append(failedSites, res.def.name)
+			continue
+		}
+		upsertFailed := false
 		for _, a := range res.auctions {
 			a = NormalizeAuction(a)
 			key := a.Street + "|" + a.SiteName
@@ -288,16 +316,24 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 				continue
 			}
 			seen[key] = true
-			upsertAuction(ctx, db, a)
+			if err := upsertAuction(ctx, db, a); err != nil {
+				log.Printf("[scraper] %s upsert failed: %v", res.def.name, err)
+				upsertFailed = true
+			}
 		}
+		if upsertFailed {
+			failedSites = append(failedSites, res.def.name)
+			continue
+		}
+		successfulSites = append(successfulSites, res.def.name)
 	}
 
-	// Tag & Sweep — hard-delete any row not touched in the last 6 hours.
-	// Runs once after ALL sites have upserted so a single failing scraper
-	// does not prematurely delete its auctions.
-	sweepStaleAuctions(ctx, db)
-
-	log.Printf("[scraper] Pass 1 complete — all addresses and statuses committed to database")
+	runErr := finalizeScrape(ctx, db, scraperNames(scrapers), successfulSites, failedSites)
+	if runErr != nil {
+		log.Printf("[scraper] run incomplete: %v", runErr)
+	} else {
+		log.Printf("[scraper] Pass 1 complete — all addresses and statuses committed to database")
+	}
 
 	// Backfill: NormalizeAuction extracts book/page inline for every new row.
 	// This pass also catches existing DB rows that pre-date book/page extraction.
@@ -308,5 +344,54 @@ func ScrapAllSites(ctx context.Context, db *sql.DB) {
 	// search. A Cloudflare Worker with Puppeteer is required to automate the form.
 	// go BackfillRegistryDeepLinks(db)
 
-	log.Printf("[scraper] run complete")
+	if runErr == nil {
+		log.Printf("[scraper] run complete")
+	}
+	return runErr
+}
+
+func scraperNames(scrapers []scraperDef) []string {
+	names := make([]string, len(scrapers))
+	for i, scraper := range scrapers {
+		names[i] = scraper.name
+	}
+	return names
+}
+
+func finalizeScrape(ctx context.Context, db *sql.DB, requiredSites, successfulSites, failedSites []string) error {
+	incomplete := make(map[string]bool, len(failedSites))
+	for _, site := range failedSites {
+		incomplete[site] = true
+	}
+	for _, site := range requiredSites {
+		found := false
+		for _, successfulSite := range successfulSites {
+			if site == successfulSite {
+				found = true
+				break
+			}
+		}
+		if !found {
+			incomplete[site] = true
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		incomplete["context"] = true
+	}
+
+	if len(incomplete) > 0 {
+		sites := make([]string, 0, len(incomplete))
+		for site := range incomplete {
+			sites = append(sites, site)
+		}
+		sort.Strings(sites)
+		err := fmt.Errorf("scrape run partial; incomplete sources: %s", strings.Join(sites, ", "))
+		log.Printf("[scraper] stale-auction sweep skipped: %v", err)
+		return err
+	}
+
+	if err := sweepStaleAuctions(ctx, db, requiredSites); err != nil {
+		return fmt.Errorf("stale-auction sweep failed: %w", err)
+	}
+	return nil
 }
