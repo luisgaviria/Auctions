@@ -1,10 +1,9 @@
 // cmd/geocode/main.go
 //
 // Geocode worker — finds every auction with lat='0' and fills in
-// real coordinates from the Radar API (5 req/s rate limit).
+// real coordinates from the MapTiler API (5 req/s rate limit).
 //
-// Each auction is geocoded exactly once. If coordinates already exist
-// (lat != '0') the row is skipped, even across repeated runs.
+// Failed addresses retain their error and retry schedule in the database.
 //
 // Usage (from the backend/ directory):
 //
@@ -51,12 +50,15 @@ func main() {
 		log.Fatalf("db ping: %v", err)
 	}
 	log.Println("[geocode] connected to database")
+	utils.InitTables(db)
 
 	// 60-minute ceiling — enough to backfill hundreds of rows at 5 req/s.
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	defer cancel()
 
-	utils.RunGeocodeWorker(ctx, db)
+	if err := utils.RunGeocodeWorker(ctx, db); err != nil {
+		log.Fatalf("[geocode] worker failed: %v", err)
+	}
 }
 
 func getDatabaseURL() (string, error) {

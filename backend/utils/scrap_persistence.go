@@ -49,13 +49,6 @@ var upsertAuctionSQL = `
 			updated_at        = NOW()
 	RETURNING id;`
 
-// sweepStaleSQL hard-deletes rows that have not been seen by any scraper in the
-// last 6 hours.  The 6-hour window means a single transient scraper failure
-// leaves data intact; two consecutive missed runs signal genuine removal.
-var sweepStaleSQL = `
-	DELETE FROM auctions
-	WHERE last_seen < NOW() - INTERVAL '6 hours';`
-
 // upsertAuction writes a single already-normalised auction to the DB.
 // Callers must run NormalizeAuction before calling this function.
 // nullIfEmpty converts an empty string to a nil interface so lib/pq writes SQL
@@ -81,7 +74,7 @@ func atoiSafe(s string) int {
 	return n
 }
 
-func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
+func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) error {
 	// Skip auctions whose date has already passed (strictly before today in ET).
 	// Same-day auctions whose time has elapsed are kept: we still upsert them
 	// so that last_seen is refreshed on every scrape run. Without this, the
@@ -90,7 +83,7 @@ func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 	// (purgePastAuctions) is the correct place to remove yesterday's rows.
 	if isPastDate(a.Date) {
 		log.Printf("[upsert] skipping past date addr=%q site=%s date=%s", a.Street, a.SiteName, a.Date)
-		return
+		return nil
 	}
 	// Log elapsed same-day auctions for visibility but do NOT skip the upsert.
 	if isElapsedToday(a.Date, a.Time) {
@@ -111,8 +104,7 @@ func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 	// is isolated to this specific SQL and avoids the conflict entirely.
 	stmt, prepErr := db.PrepareContext(ctx, upsertAuctionSQL)
 	if prepErr != nil {
-		log.Printf("[upsert] prepare error for %q (%s): %v", a.Street, a.SiteName, prepErr)
-		return
+		return fmt.Errorf("prepare upsert for %q (%s): %w", a.Street, a.SiteName, prepErr)
 	}
 	defer stmt.Close()
 
@@ -143,20 +135,35 @@ func upsertAuction(ctx context.Context, db *sql.DB, a sites.Auction) {
 		nullIfZero(a.RegistryPage),      // $23 registry_page
 	).Scan(&id)
 	if err != nil {
-		log.Printf("[upsert] error for %q (%s): %v", a.Street, a.SiteName, err)
-		return
+		return fmt.Errorf("save auction %q (%s): %w", a.Street, a.SiteName, err)
 	}
 	log.Printf("[upsert] saved auction id=%d  site=%s  addr=%q", id, a.SiteName, a.Street)
+	return nil
 }
 
-func sweepStaleAuctions(ctx context.Context, db *sql.DB) {
-	res, err := db.ExecContext(ctx, sweepStaleSQL)
+func sweepStaleAuctions(ctx context.Context, db *sql.DB, siteNames []string) error {
+	if len(siteNames) == 0 {
+		return fmt.Errorf("cannot sweep stale auctions without a completed site list")
+	}
+
+	placeholders := make([]string, len(siteNames))
+	args := make([]interface{}, len(siteNames))
+	for i, site := range siteNames {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = site
+	}
+	query := fmt.Sprintf(`
+		DELETE FROM auctions
+		WHERE site_name IN (%s)
+		  AND last_seen < NOW() - INTERVAL '6 hours';`, strings.Join(placeholders, ", "))
+
+	res, err := db.ExecContext(ctx, query, args...)
 	if err != nil {
-		log.Printf("[sweep] error: %v", err)
-		return
+		return fmt.Errorf("delete stale auctions: %w", err)
 	}
 	n, _ := res.RowsAffected()
 	log.Printf("[sweep] deleted %d auctions not seen in the last 6 hours", n)
+	return nil
 }
 
 // migrateNonISODates finds any auction whose date column contains a non-ISO

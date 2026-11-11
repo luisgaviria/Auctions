@@ -65,7 +65,7 @@ func main() {
 	// ── Full scrape + upsert + cleanup ───────────────────────────────────────
 	log.Println("=== starting full population run (12 scrapers) ===")
 	start := time.Now()
-	utils.ScrapAllSites(ctx, db)
+	scrapeErr := utils.ScrapAllSites(ctx, db)
 	log.Printf("=== scrape complete in %s ===", time.Since(start).Round(time.Second))
 
 	// ── Final DB verification ─────────────────────────────────────────────────
@@ -123,6 +123,9 @@ func main() {
 		log.Println("WARNING: 0 rows — check scraper logs above for errors")
 	} else {
 		log.Printf("OK: %d total auction rows in Supabase across %d sites", grand, len(totals))
+	}
+	if scrapeErr != nil {
+		log.Fatalf("[dryrun] scrape run incomplete: %v", scrapeErr)
 	}
 }
 
